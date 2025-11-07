@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adlocaite Broadsign Integration</title>
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Main player container -->
+  <div id="adlocaite-container" class="adlocaite-container">
+    <div class="loading-screen">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Loading Adlocaite...</div>
+    </div>
+  </div>
+
+  <!-- Debug panel (only visible in debug mode) -->
+  <div id="debug-panel" class="debug-panel" style="display: none;">
+    <h3>Adlocaite Debug Panel</h3>
+    <div id="debug-log" class="debug-log"></div>
+  </div>
+
+  <!-- Configuration -->
+  <script src="js/config.js"></script>
+
+  <!-- Core modules -->
+  <script src="js/adlocaite-api.js"></script>
+  <script src="js/broadsign-adapter.js"></script>
+  <script src="js/vast-parser.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/cache-manager.js"></script>
+
+  <!-- Main application -->
+  <script>
+    /**
+     * Adlocaite Broadsign Integration
+     * Main application orchestrator
+     */
+    class AdlocaiteApp {
+      constructor() {
+        this.config = null;
+        this.apiClient = null;
+        this.broadsignAdapter = null;
+        this.vastParser = null;
+        this.player = null;
+        this.cacheManager = null;
+        this.initialized = false;
+      }
+
+      /**
+       * Initialize application
+       */
+      async initialize() {
+        console.log('[Adlocaite] Initializing application...');
+
+        try {
+          // Load configuration
+          this.config = window.ADLOCAITE_CONFIG;
+          if (!this.config) {
+            throw new Error('Configuration not found. Please create config.js from config.example.js');
+          }
+
+          // Enable debug panel if needed
+          if (this.config.debugMode) {
+            document.getElementById('debug-panel').style.display = 'block';
+            this.setupDebugLogging();
+          }
+
+          // Validate API key
+          if (!this.config.apiKey || this.config.apiKey === 'pub_xxxx') {
+            throw new Error('Invalid API key. Please configure your API key in config.js');
+          }
+
+          // Initialize components
+          this.apiClient = new AdlocaiteAPIClient(this.config);
+          this.broadsignAdapter = new BroadsignAdapter(this.config);
+          this.vastParser = new VASTParser(this.config);
+          this.player = new AdlocaitePlayer(
+            this.config,
+            this.apiClient,
+            this.broadsignAdapter,
+            this.vastParser
+          );
+          this.cacheManager = new CacheManager(this.config, this.apiClient);
+
+          // Initialize Broadsign adapter
+          const playerInfo = this.broadsignAdapter.initialize();
+          console.log('[Adlocaite] Player info:', playerInfo);
+
+          // Initialize player
+          this.player.initialize('adlocaite-container');
+
+          this.initialized = true;
+          console.log('[Adlocaite] Application initialized successfully');
+
+        } catch (err) {
+          console.error('[Adlocaite] Initialization failed:', err);
+          this.showError('Initialization failed: ' + err.message);
+          throw err;
+        }
+      }
+
+      /**
+       * Start playback - called when BroadSignPlay() is triggered
+       */
+      async start() {
+        if (!this.initialized) {
+          console.error('[Adlocaite] Cannot start - not initialized');
+          return;
+        }
+
+        console.log('[Adlocaite] Starting playback...');
+
+        try {
+          // Get screen ID
+          const screenId = this.broadsignAdapter.getScreenId();
+          console.log('[Adlocaite] Screen ID:', screenId);
+
+          // Start cache manager
+          if (this.config.enableCaching) {
+            this.cacheManager.start(screenId);
+          }
+
+          // Request offer
+          console.log('[Adlocaite] Requesting offer...');
+          const offerResponse = await this.apiClient.requestOffer(screenId, {
+            vast: this.config.vastMode,
+            minBidCents: this.config.minBidCents
+          });
+
+          // Check if VAST XML (string) or JSON
+          let vastXml, offerData;
+          
+          if (typeof offerResponse === 'string') {
+            // VAST XML response
+            vastXml = offerResponse;
+            console.log('[Adlocaite] VAST XML received');
+          } else {
+            // JSON response with VAST XML
+            vastXml = offerResponse.vast_xml;
+            offerData = offerResponse;
+            console.log('[Adlocaite] Offer received:', offerData);
+          }
+
+          if (!vastXml) {
+            throw new Error('No VAST XML in response');
+          }
+
+          // Parse VAST
+          const vastData = this.vastParser.parse(vastXml);
+          console.log('[Adlocaite] VAST parsed:', vastData);
+
+          // Extract deal ID from VAST extensions
+          let dealId = this.vastParser.getDealId();
+          
+          // Fallback: Accept offer to get deal ID if not in VAST
+          if (!dealId && offerData && offerData.offer_id) {
+            console.log('[Adlocaite] Accepting offer:', offerData.offer_id);
+            const acceptResponse = await this.apiClient.acceptOffer(
+              offerData.offer_id,
+              offerData.bid_price_cents
+            );
+            dealId = acceptResponse.deal_id;
+            console.log('[Adlocaite] Offer accepted. Deal ID:', dealId);
+          }
+
+          // Play media
+          console.log('[Adlocaite] Starting playback...');
+          await this.player.playFromVAST(vastData, dealId);
+          console.log('[Adlocaite] Playback completed successfully');
+
+        } catch (err) {
+          console.error('[Adlocaite] Playback failed:', err);
+          
+          // Show fallback if enabled
+          if (this.config.fallbackEnabled) {
+            const message = err.message || 'Playback error';
+            this.player.showFallback(message);
+            
+            // Display fallback for a reasonable duration
+            setTimeout(() => {
+              console.log('[Adlocaite] Fallback display completed');
+            }, 15000);
+          } else {
+            this.showError('Playback failed: ' + err.message);
+          }
+        }
+      }
+
+      /**
+       * Show error message
+       */
+      showError(message) {
+        const container = document.getElementById('adlocaite-container');
+        container.innerHTML = `
+          <div class="error-screen">
+            <div class="error-icon">⚠</div>
+            <div class="error-message">${message}</div>
+          </div>
+        `;
+      }
+
+      /**
+       * Setup debug logging to panel
+       */
+      setupDebugLogging() {
+        const originalConsoleLog = console.log;
+        const originalConsoleError = console.error;
+        const debugLog = document.getElementById('debug-log');
+
+        console.log = function(...args) {
+          originalConsoleLog.apply(console, args);
+          const message = args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : a).join(' ');
+          debugLog.innerHTML += `<div class="debug-entry log">${message}</div>`;
+          debugLog.scrollTop = debugLog.scrollHeight;
+        };
+
+        console.error = function(...args) {
+          originalConsoleError.apply(console, args);
+          const message = args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : a).join(' ');
+          debugLog.innerHTML += `<div class="debug-entry error">${message}</div>`;
+          debugLog.scrollTop = debugLog.scrollHeight;
+        };
+      }
+    }
+
+    // Create global app instance
+    const app = new AdlocaiteApp();
+
+    // Initialize on page load
+    window.addEventListener('DOMContentLoaded', async () => {
+      console.log('[Adlocaite] DOM loaded');
+      
+      try {
+        await app.initialize();
+      } catch (err) {
+        console.error('[Adlocaite] Failed to initialize:', err);
+      }
+    });
+
+    // Handle Broadsign ready event
+    window.onBroadSignReady = function() {
+      console.log('[Adlocaite] Broadsign ready - starting playback');
+      app.start().catch(err => {
+        console.error('[Adlocaite] Start failed:', err);
+      });
+    };
+
+    // Alternative: Listen for custom event
+    window.addEventListener('broadsignready', () => {
+      console.log('[Adlocaite] Broadsign ready event received');
+      app.start().catch(err => {
+        console.error('[Adlocaite] Start failed:', err);
+      });
+    });
+
+    // For testing in browser (not in Broadsign Player)
+    // Uncomment the line below to auto-start after 2 seconds
+    // setTimeout(() => { if (!app.broadsignAdapter.isBroadsignEnvironment()) app.start(); }, 2000);
+  </script>
+</body>
+</html>
+
+

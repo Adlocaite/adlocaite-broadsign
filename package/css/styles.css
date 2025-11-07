@@ -1,0 +1,332 @@
+/**
+ * Adlocaite Broadsign Integration Styles
+ * 
+ * Responsive styling for DOOH displays
+ */
+
+/* Reset and base styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* Main container */
+.adlocaite-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  overflow: hidden;
+}
+
+/* Video element */
+#adlocaite-video {
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+/* Image element */
+#adlocaite-image {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+/* Loading screen */
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  text-align: center;
+  gap: 20px;
+}
+
+.loading-spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  font-size: 24px;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Fallback content */
+.adlocaite-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  padding: 40px;
+}
+
+.fallback-image {
+  max-width: 80%;
+  max-height: 60%;
+  object-fit: contain;
+  margin-bottom: 40px;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+}
+
+.fallback-message {
+  font-size: 28px;
+  font-weight: 300;
+  color: #fff;
+  text-align: center;
+  opacity: 0.9;
+  max-width: 80%;
+}
+
+/* Error screen */
+.error-screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #991b1b;
+  padding: 40px;
+  color: #fff;
+}
+
+.error-icon {
+  font-size: 80px;
+  margin-bottom: 20px;
+  opacity: 0.9;
+}
+
+.error-message {
+  font-size: 24px;
+  font-weight: 300;
+  text-align: center;
+  max-width: 80%;
+  line-height: 1.6;
+  opacity: 0.9;
+}
+
+/* Debug panel */
+.debug-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  background: rgba(0, 0, 0, 0.95);
+  border-top: 2px solid #3b82f6;
+  color: #fff;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  overflow: hidden;
+  z-index: 10000;
+  padding: 10px;
+}
+
+.debug-panel h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #3b82f6;
+  border-bottom: 1px solid #374151;
+  padding-bottom: 5px;
+}
+
+.debug-log {
+  height: calc(100% - 30px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #111;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.debug-entry {
+  margin-bottom: 4px;
+  padding: 4px 8px;
+  border-left: 3px solid #374151;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.debug-entry.log {
+  border-left-color: #3b82f6;
+  color: #e5e7eb;
+}
+
+.debug-entry.error {
+  border-left-color: #ef4444;
+  color: #fca5a5;
+  background: rgba(220, 38, 38, 0.1);
+}
+
+/* Scrollbar styling for debug log */
+.debug-log::-webkit-scrollbar {
+  width: 8px;
+}
+
+.debug-log::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+.debug-log::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 4px;
+}
+
+.debug-log::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1280px) {
+  .fallback-message,
+  .error-message {
+    font-size: 24px;
+  }
+  
+  .loading-text {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .fallback-message,
+  .error-message {
+    font-size: 18px;
+  }
+  
+  .loading-text {
+    font-size: 16px;
+  }
+  
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* Landscape orientation optimization */
+@media (orientation: landscape) {
+  .fallback-image {
+    max-height: 50%;
+  }
+}
+
+/* Portrait orientation optimization */
+@media (orientation: portrait) {
+  .fallback-image {
+    max-width: 90%;
+  }
+}
+
+/* High resolution displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .fallback-image,
+  #adlocaite-image {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* Transparency support for overlays */
+.adlocaite-container.transparent {
+  background: transparent;
+}
+
+.adlocaite-container.transparent #adlocaite-video,
+.adlocaite-container.transparent #adlocaite-image {
+  background: transparent;
+}
+
+/* Animation classes */
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-out {
+  animation: fadeOut 0.5s ease-out;
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Aspect ratio containers for different screen formats */
+.aspect-16-9 {
+  aspect-ratio: 16 / 9;
+}
+
+.aspect-4-3 {
+  aspect-ratio: 4 / 3;
+}
+
+.aspect-9-16 {
+  aspect-ratio: 9 / 16;
+}
+
+/* Ultra-wide support */
+@media (min-aspect-ratio: 21/9) {
+  #adlocaite-video,
+  #adlocaite-image {
+    object-fit: cover;
+  }
+}
+
+/* Print styles (for testing) */
+@media print {
+  .debug-panel {
+    display: none !important;
+  }
+}
+
+
