@@ -48,12 +48,42 @@
         this.player = null;
         this.cacheManager = null;
         this.initialized = false;
+        this.initializing = false;
+        this.initPromise = null;
       }
 
       /**
        * Initialize application
+       * Prevents parallel initialization calls with a lock mechanism
        */
       async initialize() {
+        // If already initialized, return immediately
+        if (this.initialized) {
+          console.log('[Adlocaite] Already initialized, skipping');
+          return;
+        }
+
+        // If currently initializing, wait for existing initialization to complete
+        if (this.initializing) {
+          console.log('[Adlocaite] Initialization already in progress, waiting...');
+          return this.initPromise;
+        }
+
+        // Set lock and create promise
+        this.initializing = true;
+        this.initPromise = this._performInitialization();
+
+        try {
+          await this.initPromise;
+        } finally {
+          this.initializing = false;
+        }
+      }
+
+      /**
+       * Internal initialization logic
+       */
+      async _performInitialization() {
         console.log('[Adlocaite] Initializing application...');
 
         try {
@@ -72,6 +102,31 @@
           // Validate API key
           if (!this.config.apiKey || this.config.apiKey === 'pub_xxxx') {
             throw new Error('Invalid API key. Please configure your API key in config.js');
+          }
+
+          // Comprehensive config validation
+          if (!this.config.apiBaseUrl || !this.config.apiBaseUrl.startsWith('http')) {
+            throw new Error('Invalid apiBaseUrl in config. Must be a valid HTTP(S) URL.');
+          }
+
+          if (typeof this.config.requestTimeout !== 'number' || this.config.requestTimeout <= 0) {
+            throw new Error('Invalid requestTimeout in config. Must be a positive number.');
+          }
+
+          if (typeof this.config.assetTimeout !== 'number' || this.config.assetTimeout <= 0) {
+            throw new Error('Invalid assetTimeout in config. Must be a positive number.');
+          }
+
+          if (typeof this.config.minBidCents !== 'number' || this.config.minBidCents < 0) {
+            throw new Error('Invalid minBidCents in config. Must be a non-negative number.');
+          }
+
+          if (typeof this.config.maxRetries !== 'number' || this.config.maxRetries < 0) {
+            throw new Error('Invalid maxRetries in config. Must be a non-negative number.');
+          }
+
+          if (typeof this.config.cachingInterval !== 'number' || this.config.cachingInterval <= 0) {
+            throw new Error('Invalid cachingInterval in config. Must be a positive number.');
           }
 
           // Initialize components
@@ -161,9 +216,16 @@
             throw new Error('No VAST XML in response');
           }
 
-          // Parse VAST
-          const vastData = this.vastParser.parse(vastXml);
-          console.log('[Adlocaite] VAST parsed:', vastData);
+          // Parse VAST with specific error handling
+          let vastData;
+          try {
+            vastData = this.vastParser.parse(vastXml);
+            console.log('[Adlocaite] VAST parsed:', vastData);
+          } catch (parseErr) {
+            console.error('[Adlocaite] VAST parsing failed:', parseErr);
+            console.error('[Adlocaite] VAST XML:', vastXml.substring(0, 500));
+            throw new Error('Invalid VAST XML: ' + parseErr.message);
+          }
 
           // Extract deal ID from VAST extensions
           let dealId = this.vastParser.getDealId();
@@ -171,12 +233,23 @@
           // Fallback: Accept offer to get deal ID if not in VAST
           if (!dealId && offerData && offerData.offer_id) {
             console.log('[Adlocaite] Accepting offer:', offerData.offer_id);
-            const acceptResponse = await this.apiClient.acceptOffer(
-              offerData.offer_id,
-              offerData.bid_price_cents
-            );
-            dealId = acceptResponse.deal_id;
-            console.log('[Adlocaite] Offer accepted. Deal ID:', dealId);
+
+            try {
+              const acceptResponse = await this.apiClient.acceptOffer(
+                offerData.offer_id,
+                offerData.bid_price_cents
+              );
+
+              if (!acceptResponse || !acceptResponse.deal_id) {
+                throw new Error('Accept response missing deal_id');
+              }
+
+              dealId = acceptResponse.deal_id;
+              console.log('[Adlocaite] Offer accepted. Deal ID:', dealId);
+            } catch (acceptErr) {
+              console.error('[Adlocaite] Failed to accept offer:', acceptErr);
+              throw new Error('Offer acceptance failed: ' + acceptErr.message);
+            }
           }
 
           // Play media
@@ -260,10 +333,17 @@
       console.log('[Adlocaite] Broadsign ready - starting playback');
 
       try {
-        // Wait for initialization if not complete yet
+        // Wait for initialization if not complete yet (with timeout)
         if (!app.initialized) {
           console.log('[Adlocaite] Waiting for initialization to complete...');
-          await app.initialize();
+
+          // Wrap initialization with a timeout (30 seconds max)
+          const initPromise = app.initialize();
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Initialization timeout after 30s')), 30000)
+          );
+
+          await Promise.race([initPromise, timeoutPromise]);
         }
 
         await app.start();
@@ -277,10 +357,17 @@
       console.log('[Adlocaite] Broadsign ready event received');
 
       try {
-        // Wait for initialization if not complete yet
+        // Wait for initialization if not complete yet (with timeout)
         if (!app.initialized) {
           console.log('[Adlocaite] Waiting for initialization to complete...');
-          await app.initialize();
+
+          // Wrap initialization with a timeout (30 seconds max)
+          const initPromise = app.initialize();
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Initialization timeout after 30s')), 30000)
+          );
+
+          await Promise.race([initPromise, timeoutPromise]);
         }
 
         await app.start();

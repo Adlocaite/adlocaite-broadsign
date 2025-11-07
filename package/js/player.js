@@ -127,12 +127,20 @@ class AdlocaitePlayer {
       // Timeout for loading
       const loadTimeout = setTimeout(() => {
         this.error('Video loading timeout');
+        this.cleanup();
         reject(new Error('Video loading timeout'));
       }, this.config.assetTimeout);
 
+      // Helper to clear timeout safely
+      const clearLoadTimeout = () => {
+        if (loadTimeout) {
+          clearTimeout(loadTimeout);
+        }
+      };
+
       // Event listeners
       this.videoElement.addEventListener('loadedmetadata', () => {
-        clearTimeout(loadTimeout);
+        clearLoadTimeout();
         this.duration = this.videoElement.duration;
         this.log(`Video loaded. Duration: ${this.duration}s`);
       });
@@ -150,6 +158,7 @@ class AdlocaitePlayer {
       });
 
       this.videoElement.addEventListener('ended', async () => {
+        clearLoadTimeout();
         this.log('Video playback ended');
         this.completionRate = 100;
         await this.fireTrackingEvent('complete');
@@ -159,7 +168,7 @@ class AdlocaitePlayer {
       });
 
       this.videoElement.addEventListener('error', (e) => {
-        clearTimeout(loadTimeout);
+        clearLoadTimeout();
         this.error('Video playback error', e);
         this.cleanup();
         reject(new Error(`Video error: ${e.message || 'Unknown error'}`));
@@ -195,27 +204,35 @@ class AdlocaitePlayer {
       // Timeout for loading
       const loadTimeout = setTimeout(() => {
         this.error('Image loading timeout');
+        this.cleanup();
         reject(new Error('Image loading timeout'));
       }, this.config.assetTimeout);
 
+      // Helper to clear timeout safely
+      const clearLoadTimeout = () => {
+        if (loadTimeout) {
+          clearTimeout(loadTimeout);
+        }
+      };
+
       // On load
       this.imageElement.addEventListener('load', async () => {
-        clearTimeout(loadTimeout);
+        clearLoadTimeout();
         this.log('Image loaded');
-        
+
         this.isPlaying = true;
         this.startTime = Date.now();
         this.broadsignAdapter.startPlayback();
-        
+
         await this.fireTrackingEvent('start');
-        
+
         // Use duration from VAST or default to 15 seconds
         const displayDuration = (this.duration || 15) * 1000;
         this.log(`Displaying image for ${displayDuration}ms`);
-        
+
         // Simulate progress events for image
         this.simulateImageProgress(displayDuration);
-        
+
         // Wait for duration
         setTimeout(async () => {
           this.completionRate = 100;
@@ -228,7 +245,7 @@ class AdlocaitePlayer {
 
       // On error
       this.imageElement.addEventListener('error', (e) => {
-        clearTimeout(loadTimeout);
+        clearLoadTimeout();
         this.error('Image loading error', e);
         this.cleanup();
         reject(new Error('Failed to load image'));
@@ -240,7 +257,10 @@ class AdlocaitePlayer {
    * Handle video progress and fire quartile tracking events
    */
   handleVideoProgress() {
-    if (!this.videoElement || !this.duration) return;
+    // Guard against invalid duration (0, negative, or undefined)
+    if (!this.videoElement || !this.duration || this.duration <= 0) {
+      return;
+    }
 
     const currentTime = this.videoElement.currentTime;
     const progress = (currentTime / this.duration) * 100;
