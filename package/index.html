@@ -131,9 +131,21 @@
             minBidCents: this.config.minBidCents
           });
 
+          // Check for no offers available (404 handled gracefully)
+          if (offerResponse && offerResponse.noOffersAvailable) {
+            console.log('[Adlocaite] No offers available for this screen');
+            throw new Error('No offers available');
+          }
+
+          // Check for other API errors
+          if (offerResponse && offerResponse.error) {
+            console.error('[Adlocaite] API error:', offerResponse.message);
+            throw new Error(offerResponse.message || 'API request failed');
+          }
+
           // Check if VAST XML (string) or JSON
           let vastXml, offerData;
-          
+
           if (typeof offerResponse === 'string') {
             // VAST XML response
             vastXml = offerResponse;
@@ -230,10 +242,10 @@
     // Create global app instance
     const app = new AdlocaiteApp();
 
-    // Initialize on page load
+    // Initialize on page load (non-blocking)
     window.addEventListener('DOMContentLoaded', async () => {
       console.log('[Adlocaite] DOM loaded');
-      
+
       try {
         await app.initialize();
       } catch (err) {
@@ -242,19 +254,39 @@
     });
 
     // Handle Broadsign ready event
-    window.onBroadSignReady = function() {
+    // IMPORTANT: BroadSignPlay() can be called BEFORE DOMContentLoaded
+    // We must wait for initialization to complete before starting playback
+    window.onBroadSignReady = async function() {
       console.log('[Adlocaite] Broadsign ready - starting playback');
-      app.start().catch(err => {
+
+      try {
+        // Wait for initialization if not complete yet
+        if (!app.initialized) {
+          console.log('[Adlocaite] Waiting for initialization to complete...');
+          await app.initialize();
+        }
+
+        await app.start();
+      } catch (err) {
         console.error('[Adlocaite] Start failed:', err);
-      });
+      }
     };
 
     // Alternative: Listen for custom event
-    window.addEventListener('broadsignready', () => {
+    window.addEventListener('broadsignready', async () => {
       console.log('[Adlocaite] Broadsign ready event received');
-      app.start().catch(err => {
+
+      try {
+        // Wait for initialization if not complete yet
+        if (!app.initialized) {
+          console.log('[Adlocaite] Waiting for initialization to complete...');
+          await app.initialize();
+        }
+
+        await app.start();
+      } catch (err) {
         console.error('[Adlocaite] Start failed:', err);
-      });
+      }
     });
 
     // For testing in browser (not in Broadsign Player)

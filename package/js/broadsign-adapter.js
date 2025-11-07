@@ -38,9 +38,12 @@ class BroadsignAdapter {
 
   /**
    * Check if running in Broadsign Control Player
+   * Verifies that BroadSignObject exists AND is fully initialized
    */
   isBroadsignEnvironment() {
-    return typeof BroadSignObject !== 'undefined';
+    return typeof BroadSignObject !== 'undefined' &&
+           BroadSignObject !== null &&
+           typeof BroadSignObject.getScreenId === 'function';
   }
 
   /**
@@ -56,14 +59,20 @@ class BroadsignAdapter {
     // Try to get screen ID from BroadSignObject
     if (this.isBroadsignEnvironment()) {
       try {
-        if (typeof BroadSignObject.getScreenId === 'function') {
-          this.screenId = BroadSignObject.getScreenId();
+        this.screenId = BroadSignObject.getScreenId();
+
+        // Validate that we got a valid screen ID
+        if (!this.screenId || this.screenId === '') {
+          this.error('BroadSignObject.getScreenId() returned empty value');
+        } else {
           this.log(`Screen ID from BroadSignObject: ${this.screenId}`);
           return this.screenId;
         }
       } catch (err) {
         this.error('Failed to get screen ID from BroadSignObject', err);
       }
+    } else {
+      this.log('Not running in Broadsign environment - BroadSignObject not available');
     }
 
     // Fallback: Check for URL parameter
@@ -258,7 +267,15 @@ class BroadsignAdapter {
 // Global BroadSignPlay function - called by Broadsign when ad copy is shown
 function BroadSignPlay() {
   console.log('[Adlocaite] BroadSignPlay() called by Broadsign Player');
-  
+
+  // Make idempotent: prevent duplicate calls
+  // According to Broadsign best practices, this function should be safe to call multiple times
+  if (window._adlocaiteBroadSignPlayCalled) {
+    console.warn('[Adlocaite] BroadSignPlay() already called, ignoring duplicate');
+    return;
+  }
+  window._adlocaiteBroadSignPlayCalled = true;
+
   // Signal to the application that Broadsign is ready
   if (typeof window.onBroadSignReady === 'function') {
     window.onBroadSignReady();

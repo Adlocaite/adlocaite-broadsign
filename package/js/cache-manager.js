@@ -164,7 +164,17 @@ class CacheManager {
       this.log(`Asset cached successfully: ${url}`);
 
     } catch (err) {
-      this.error(`Failed to prefetch asset: ${url}`, err);
+      // Provide specific error messages for CORS issues
+      if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+        this.error(
+          `CORS or network error fetching asset: ${url}. ` +
+          `Ensure the asset server includes 'Access-Control-Allow-Origin: *' header. ` +
+          `According to Broadsign docs, remote servers MUST include this header.`,
+          err
+        );
+      } else {
+        this.error(`Failed to prefetch asset: ${url}`, err);
+      }
     }
   }
 

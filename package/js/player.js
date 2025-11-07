@@ -108,8 +108,12 @@ class AdlocaitePlayer {
       this.videoElement.id = 'adlocaite-video';
       this.videoElement.src = mediaFile.url;
       this.videoElement.autoplay = true;
-      this.videoElement.muted = false;
-      
+
+      // CRITICAL: Chromium v87+ requires muted=true for autoplay to work
+      // According to Chromium autoplay policies, videos with audio cannot autoplay unmuted
+      this.videoElement.muted = true;
+      this.videoElement.playsInline = true;  // Required for embedded/mobile contexts
+
       // Set dimensions
       if (mediaFile.width && mediaFile.height) {
         this.videoElement.width = mediaFile.width;

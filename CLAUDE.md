@@ -106,13 +106,17 @@ package/
 ### Execution Flow
 
 1. Broadsign Player loads HTML package
-2. `DOMContentLoaded` → `AdlocaiteApp.initialize()`
-3. Broadsign calls global `BroadSignPlay()` → triggers `AdlocaiteApp.start()`
+2. `DOMContentLoaded` → `AdlocaiteApp.initialize()` starts (non-blocking)
+3. **Broadsign calls global `BroadSignPlay()` → waits for init if needed → triggers `AdlocaiteApp.start()`**
+   - **CRITICAL**: `BroadSignPlay()` can fire BEFORE `DOMContentLoaded`
+   - Code now handles this race condition by waiting for initialization
 4. Get screen ID from BroadSignObject
 5. Request offer from Adlocaite API (with `vast=true`)
+   - **CRITICAL**: 404 errors are handled gracefully (no throw) to prevent Broadsign auto-skip
 6. Parse VAST XML to extract media URL and tracking events
 7. Accept offer to get deal_id (if not in VAST)
 8. Play media (video or image)
+   - **CRITICAL**: Videos use `muted=true` for Chromium v87+ autoplay compatibility
 9. Fire VAST tracking events during playback
 10. Confirm playout via API with deal_id
 11. Clean up and complete
@@ -232,3 +236,32 @@ Expected log sequence:
 - Module files are loaded in order: config → api → adapter → vast → player → cache
 - Global classes are exposed via `window.ClassName` for cross-module access
 - Build scripts zip the entire `package/` directory - avoid adding unnecessary files
+
+## Critical Fixes Applied (2025-01-07)
+
+The following critical issues have been fixed in the codebase:
+
+1. **Initialization Race Condition** (index.html:247-261)
+   - `BroadSignPlay()` now waits for initialization to complete
+   - Prevents "Cannot start - not initialized" errors
+
+2. **HTTP 404 Graceful Handling** (adlocaite-api.js:88-117)
+   - 404 errors return `{noOffersAvailable: true}` instead of throwing
+   - Prevents Broadsign auto-skip, allows fallback content to display
+   - All 4xx errors handled gracefully to prevent auto-skip
+
+3. **Video Autoplay Fix** (player.js:114-115)
+   - Videos now use `muted: true` + `playsInline: true`
+   - Required for Chromium v87+ autoplay policies
+
+4. **BroadSignObject Validation** (broadsign-adapter.js:43-46)
+   - `isBroadsignEnvironment()` now verifies object is fully initialized
+   - Checks for null and function availability
+
+5. **CORS Error Messages** (cache-manager.js:167-177)
+   - Better error messages when CORS headers are missing
+   - References Broadsign requirement for `Access-Control-Allow-Origin: *`
+
+6. **BroadSignPlay() Idempotency** (broadsign-adapter.js:271-277)
+   - Prevents duplicate execution if called multiple times
+   - Follows Broadsign best practices

@@ -85,6 +85,18 @@ class AdlocaiteAPIClient {
         errorData.body = await response.text();
       }
 
+      // CRITICAL: Handle 404 gracefully to prevent Broadsign auto-skip
+      // According to Broadsign docs: "HTTP errors (4xx/5xx) trigger automatic playback skipping"
+      // We return a special object instead of throwing to allow fallback content
+      if (response.status === 404) {
+        this.log('No offers available (404) - returning gracefully');
+        return {
+          noOffersAvailable: true,
+          status: 404,
+          message: 'No offers available for this screen'
+        };
+      }
+
       // Retry on 5xx errors
       if (response.status >= 500 && retryCount < this.maxRetries) {
         const delay = this.retryDelay * Math.pow(2, retryCount);
@@ -93,6 +105,18 @@ class AdlocaiteAPIClient {
         return this.makeRequest(url, options, retryCount + 1);
       }
 
+      // For other 4xx errors, log but don't throw (prevents Broadsign auto-skip)
+      if (response.status >= 400 && response.status < 500) {
+        this.error(`Client error ${response.status}: ${response.statusText}`, errorData);
+        return {
+          error: true,
+          status: response.status,
+          message: `Client error: ${response.statusText}`,
+          data: errorData
+        };
+      }
+
+      // 5xx errors after retries exhausted
       throw new Error(`API request failed: ${JSON.stringify(errorData)}`);
 
     } catch (err) {
