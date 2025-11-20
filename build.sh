@@ -25,8 +25,8 @@ if [ ! -f "package/js/config.js" ]; then
   exit 1
 fi
 
-# Check if API key is configured
-if grep -q "pub_xxxx" "package/js/config.js"; then
+# Check if API key is configured (only check the actual apiKey line, not comments)
+if grep "^\s*apiKey:" "package/js/config.js" | grep -q "pub_xxxx"; then
   echo -e "${YELLOW}⚠️  Warning: API key not configured in config.js${NC}"
   echo "Make sure to update your API key before deploying to production."
   echo ""
