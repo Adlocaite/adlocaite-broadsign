@@ -29,4 +29,9 @@ node_modules/
 .tmp/
 temp/
 
+# Claude Code
+.claude/
+
+# Old test files
+test-*.html
 

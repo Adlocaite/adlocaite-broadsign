@@ -38,17 +38,19 @@ class BroadsignAdapter {
 
   /**
    * Check if running in Broadsign Control Player
-   * Verifies that BroadSignObject exists AND is fully initialized
+   * Verifies that BroadSignObject exists AND has required properties
    */
   isBroadsignEnvironment() {
     return typeof BroadSignObject !== 'undefined' &&
            BroadSignObject !== null &&
-           typeof BroadSignObject.getScreenId === 'function';
+           (BroadSignObject.frame_id !== undefined ||
+            BroadSignObject.display_unit_id !== undefined ||
+            BroadSignObject.player_id !== undefined);
   }
 
   /**
    * Get screen ID from Broadsign
-   * Uses BroadSignObject.getScreenId() if available
+   * Uses BroadSignObject.frame_id as external identifier
    * Falls back to configured fallback or generates a test ID
    */
   getScreenId() {
@@ -56,20 +58,21 @@ class BroadsignAdapter {
       return this.screenId;
     }
 
-    // Try to get screen ID from BroadSignObject
+    // Try to get frame ID from BroadSignObject (as external_id for API)
     if (this.isBroadsignEnvironment()) {
       try {
-        this.screenId = BroadSignObject.getScreenId();
+        // Use frame_id property (not a method!) - represents individual screen
+        this.screenId = BroadSignObject.frame_id;
 
         // Validate that we got a valid screen ID
         if (!this.screenId || this.screenId === '') {
-          this.error('BroadSignObject.getScreenId() returned empty value');
+          this.error('BroadSignObject.frame_id is empty or undefined');
         } else {
-          this.log(`Screen ID from BroadSignObject: ${this.screenId}`);
+          this.log(`Screen ID (frame_id) from BroadSignObject: ${this.screenId}`);
           return this.screenId;
         }
       } catch (err) {
-        this.error('Failed to get screen ID from BroadSignObject', err);
+        this.error('Failed to get frame_id from BroadSignObject', err);
       }
     } else {
       this.log('Not running in Broadsign environment - BroadSignObject not available');
@@ -91,10 +94,10 @@ class BroadsignAdapter {
       return this.screenId;
     }
 
-    // Final fallback: Generate test ID for development
-    this.screenId = `test-screen-${Date.now()}`;
-    this.error(`No screen ID available, using fallback: ${this.screenId}`);
-    return this.screenId;
+    // No screen ID available - return null
+    // Application should handle this and either enable demo mode or show error
+    this.error('No screen ID available from BroadSignObject, URL, or localStorage');
+    return null;
   }
 
   /**

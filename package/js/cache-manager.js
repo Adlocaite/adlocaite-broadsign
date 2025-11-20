@@ -92,8 +92,8 @@ class CacheManager {
     this.log('Updating cache...');
 
     try {
-      // Fetch cacheable assets
-      const response = await this.apiClient.getCacheableAssets(this.screenId);
+      // Fetch cacheable assets using external ID (frame_id from Broadsign)
+      const response = await this.apiClient.getCacheableAssetsByExternalId(this.screenId);
       
       if (!response || !response.assets) {
         this.log('No cacheable assets returned');

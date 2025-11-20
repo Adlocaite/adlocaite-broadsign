@@ -172,6 +172,12 @@
         try {
           // Get screen ID
           const screenId = this.broadsignAdapter.getScreenId();
+
+          // Fail if no screen ID available
+          if (!screenId) {
+            throw new Error('No screen ID available. Package must run in Broadsign Player or provide screen_id via URL parameter.');
+          }
+
           console.log('[Adlocaite] Screen ID:', screenId);
 
           // Start cache manager
@@ -179,9 +185,9 @@
             this.cacheManager.start(screenId);
           }
 
-          // Request offer
+          // Request offer using external ID (frame_id from Broadsign)
           console.log('[Adlocaite] Requesting offer...');
-          const offerResponse = await this.apiClient.requestOffer(screenId, {
+          const offerResponse = await this.apiClient.requestOfferByExternalId(screenId, {
             vast: this.config.vastMode,
             minBidCents: this.config.minBidCents
           });
@@ -207,7 +213,7 @@
             console.log('[Adlocaite] VAST XML received');
           } else {
             // JSON response with VAST XML
-            vastXml = offerResponse.vast_xml;
+            vastXml = offerResponse.vast; // API returns "vast", not "vast_xml"
             offerData = offerResponse;
             console.log('[Adlocaite] Offer received:', offerData);
           }

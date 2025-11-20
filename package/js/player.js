@@ -169,9 +169,16 @@ class AdlocaitePlayer {
 
       this.videoElement.addEventListener('error', (e) => {
         clearLoadTimeout();
-        this.error('Video playback error', e);
+        const videoError = this.videoElement.error;
+        const errorDetails = {
+          url: mediaFile.url,
+          type: mediaFile.type,
+          code: videoError ? videoError.code : 'unknown',
+          message: videoError ? videoError.message : 'unknown'
+        };
+        this.error(`Video playback error: ${mediaFile.url}`, errorDetails);
         this.cleanup();
-        reject(new Error(`Video error: ${e.message || 'Unknown error'}`));
+        reject(new Error(`Video error: ${errorDetails.message} (code: ${errorDetails.code})`));
       });
 
       // Start loading
@@ -184,6 +191,7 @@ class AdlocaitePlayer {
    */
   async playImage(mediaFile) {
     this.log('Playing image', mediaFile);
+    this.log(`Image URL: ${mediaFile.url}`);
 
     return new Promise((resolve, reject) => {
       // Create image element
@@ -246,9 +254,13 @@ class AdlocaitePlayer {
       // On error
       this.imageElement.addEventListener('error', (e) => {
         clearLoadTimeout();
-        this.error('Image loading error', e);
+        this.error(`Image loading error: ${mediaFile.url}`, {
+          url: mediaFile.url,
+          type: mediaFile.type,
+          event: e
+        });
         this.cleanup();
-        reject(new Error('Failed to load image'));
+        reject(new Error(`Failed to load image: ${mediaFile.url}`));
       });
     });
   }

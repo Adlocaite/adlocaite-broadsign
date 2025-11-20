@@ -74,14 +74,15 @@ package/
 
 **BroadsignAdapter** (broadsign-adapter.js):
 - Interfaces with Broadsign Control Player via global `BroadSignObject`
-- Provides screen identification: `getScreenId()`, `getDisplayUnitId()`, `getPlayerId()`
+- Provides screen identification: `getScreenId()` reads `BroadSignObject.frame_id` as external ID
 - Tracks playback state and duration
 - Generates playout tracking data
 - Defines global `BroadSignPlay()` function (called by Broadsign when ad copy starts)
 
 **AdlocaiteAPIClient** (adlocaite-api.js):
 - Handles all HTTP communication with Adlocaite API
-- Methods: `requestOffer()`, `acceptOffer()`, `rejectOffer()`, `confirmPlayout()`, `getCacheableAssets()`
+- Methods: `requestOfferByExternalId()`, `acceptOffer()`, `rejectOffer()`, `confirmPlayout()`, `getCacheableAssetsByExternalId()`
+- Uses External ID endpoints to support Broadsign frame_id as screen identifier
 - Implements retry logic with exponential backoff
 - Request timeout handling (default: 10s)
 - Bearer token authentication via `Authorization` header
@@ -131,10 +132,21 @@ package/
 - Use `BroadSignPlay()` for: video pre-buffering, controlling start timing, requesting focus
 
 **BroadSignObject API:**
-- `BroadSignObject.getScreenId()` - Returns screen identifier (only available in Broadsign Player)
-- `BroadSignObject.getDisplayUnitId()` - Returns display unit identifier
-- `BroadSignObject.getPlayerId()` - Returns player identifier
+
+Documentation: https://docs.broadsign.com/broadsign-control/latest/content-variables.html
+
+**Properties (automatic variables injected by Broadsign):**
+- `BroadSignObject.frame_id` - Frame ID (used as external_id for Adlocaite API) - represents individual screen
+- `BroadSignObject.display_unit_id` - Display Unit ID (logical grouping, can have multiple frames)
+- `BroadSignObject.player_id` - Player ID (PC/hardware, can have multiple display units)
+- `BroadSignObject.frame_resolution` - Frame resolution (e.g., "1920x1080")
+- `BroadSignObject.display_unit_resolution` - Display unit resolution
+- Additional properties: campaign_id, impressions_per_hour, expected_slot_duration_ms, etc.
+
+**Methods:**
 - `BroadSignObject.requestFocus()` - Enables keyboard input (player withholds focus by default for security)
+
+**IMPORTANT:** BroadSignObject provides PROPERTIES, not getter methods. Access them directly (e.g., `BroadSignObject.frame_id`), NOT as methods (e.g., ~~`BroadSignObject.getFrameId()`~~).
 
 **Environment Constraints:**
 - Screen identification only works inside Broadsign Player (Chromium v87+)
@@ -145,9 +157,18 @@ package/
 ### API Flow
 
 The typical API flow is:
-1. `GET /offers/request/{screenId}?vast=true&min_bid_cents=X` → Returns VAST XML or JSON with `vast_xml`
+1. `GET /offers/request/external-id/{externalId}?vast=true&min_bid_cents=X` → Returns VAST XML or JSON with `vast_xml`
+   - `externalId` is the `frame_id` from BroadSignObject
+   - External ID endpoint accepts any string (not just UUIDs)
+   - Alternative UUID endpoint: `GET /offers/request/{screenId}` (requires UUID format)
 2. If needed: `POST /offers/response/{offerId}` with `{action: "accept", accepted_price_cents: X}` → Returns `deal_id`
 3. After playback: `POST /playout/confirm/{dealId}` with tracking data
+
+**Screen Identification:**
+- Broadsign provides `frame_id` as a property in BroadSignObject
+- This `frame_id` is sent as `external_id` to the Adlocaite API
+- In the Adlocaite backend, screens must have their `external_id` field set to match the Broadsign `frame_id`
+- Example: If Broadsign frame_id = "842292831", create a screen in Adlocaite with external_id = "842292831"
 
 **CORS Requirements:**
 - Remote servers (including Adlocaite API) must include `Access-Control-Allow-Origin: *` header
@@ -237,8 +258,9 @@ Expected log sequence:
 - Global classes are exposed via `window.ClassName` for cross-module access
 - Build scripts zip the entire `package/` directory - avoid adding unnecessary files
 
-## Critical Fixes Applied (2025-01-07)
+## Critical Fixes Applied
 
+### 2025-01-07 - Initial Fixes
 The following critical issues have been fixed in the codebase:
 
 1. **Initialization Race Condition** (index.html:247-261)
@@ -256,7 +278,7 @@ The following critical issues have been fixed in the codebase:
 
 4. **BroadSignObject Validation** (broadsign-adapter.js:43-46)
    - `isBroadsignEnvironment()` now verifies object is fully initialized
-   - Checks for null and function availability
+   - Checks for null and property availability
 
 5. **CORS Error Messages** (cache-manager.js:167-177)
    - Better error messages when CORS headers are missing
@@ -265,3 +287,35 @@ The following critical issues have been fixed in the codebase:
 6. **BroadSignPlay() Idempotency** (broadsign-adapter.js:271-277)
    - Prevents duplicate execution if called multiple times
    - Follows Broadsign best practices
+
+### 2025-01-20 - BroadSignObject API Correction
+
+**Root Cause:** The code was using non-existent `getScreenId()`, `getDisplayUnitId()`, and `getPlayerId()` methods. BroadSignObject provides PROPERTIES, not methods.
+
+**Impact:**
+- `getScreenId()` always failed → fallback to `test-screen-{timestamp}` IDs
+- Non-UUID screen IDs sent to UUID-only API endpoint
+- Backend returned 500 errors instead of 404 for unknown screens
+- Broadsign auto-skip on 500 errors
+
+**Fixes Applied:**
+
+7. **BroadSignObject Property Access** (broadsign-adapter.js:54-77)
+   - Changed from `BroadSignObject.getScreenId()` to `BroadSignObject.frame_id`
+   - Changed from method calls to direct property access
+   - `frame_id` represents individual screen/frame in Broadsign
+
+8. **External ID API Endpoints** (index.html:184, cache-manager.js:96)
+   - Switched from `/offers/request/{screenId}` to `/offers/request/external-id/{externalId}`
+   - Switched from `/screens/{screenId}/cacheable-assets` to `/screens/external-id/{externalId}/cacheable-assets`
+   - External ID endpoints accept any string (not just UUIDs)
+   - Allows Broadsign `frame_id` to be used directly as screen identifier
+
+9. **500 Error Graceful Handling** (adlocaite-api.js:119-138)
+   - 500 errors with "screen not found" messages now handled gracefully
+   - Returns `{noOffersAvailable: true}` instead of throwing
+   - Prevents Broadsign auto-skip when screen is not registered
+
+**Configuration Required:**
+- In Adlocaite backend, set screen `external_id` field to match Broadsign `frame_id`
+- Example: Broadsign frame_id = "842292831" → Adlocaite screen external_id = "842292831"

@@ -117,6 +117,24 @@ class AdlocaiteAPIClient {
       }
 
       // 5xx errors after retries exhausted
+      // CRITICAL: Check if this is a "screen not found" or "no offers" error
+      // These should be treated gracefully like 404 instead of throwing
+      if (errorData.body && typeof errorData.body === 'object') {
+        const errorMessage = errorData.body.error || errorData.body.message || '';
+        if (errorMessage.toLowerCase().includes('screen') ||
+            errorMessage.toLowerCase().includes('not found') ||
+            errorMessage.toLowerCase().includes('no offer') ||
+            errorMessage.toLowerCase().includes('unknown')) {
+          this.log('500 error appears to be "no offers/screen not found" - handling gracefully');
+          return {
+            noOffersAvailable: true,
+            status: response.status,
+            message: errorMessage || 'No offers available'
+          };
+        }
+      }
+
+      // Other 5xx errors - throw to trigger fallback
       throw new Error(`API request failed: ${JSON.stringify(errorData)}`);
 
     } catch (err) {
