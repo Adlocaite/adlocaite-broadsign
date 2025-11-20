@@ -79,6 +79,58 @@ Enable debug logging for details:
 debugMode: true
 ```
 
+## Contributing
+
+We welcome contributions! Here's how to get started:
+
+### Development Workflow
+
+1. **Fork the repository** on GitHub
+2. **Create a feature branch** from `dev`:
+   ```bash
+   git checkout dev
+   git pull origin dev
+   git checkout -b feature/your-feature-name
+   ```
+3. **Make your changes** and test locally
+4. **Commit your changes**:
+   ```bash
+   git add .
+   git commit -m "Description of changes"
+   ```
+5. **Push to your fork**:
+   ```bash
+   git push -u origin feature/your-feature-name
+   ```
+6. **Create a Pull Request** to the `dev` branch
+
+### Testing Your Changes
+
+```bash
+# Build the package
+./build.sh
+
+# Start test server
+npm run test:serve
+
+# Open test interface
+# http://127.0.0.1:8000/test/
+```
+
+### Code Standards
+
+- All comments and documentation in English
+- Test your changes before committing
+- Never commit `package/js/config.js` (use `config.example.js`)
+- Follow existing code style and structure
+- Update documentation if adding features
+
+### Branch Protection
+
+- Direct pushes to `main` and `dev` are blocked
+- All changes must go through Pull Requests
+- Git hooks will run automatically to prevent sensitive data commits
+
 ## Resources
 
 - **Dashboard**: [app.adlocaite.com](https://app.adlocaite.com)
