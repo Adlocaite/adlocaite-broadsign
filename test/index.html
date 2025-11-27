@@ -424,6 +424,17 @@
 
       log('Config: API Key set, Caching=' + enableCaching + ', VAST=' + vastMode + ', Debug=' + debugMode, 'info');
 
+      // Store config in parent window so iframe can access it immediately
+      window.ADLOCAITE_TEST_CONFIG = {
+        apiKey,
+        enableCaching,
+        vastMode,
+        debugMode,
+        fallbackEnabled,
+        minBidCents: parseInt(minBid)
+      };
+      log('Config stored in parent window for early access', 'info');
+
       let packageUrl = '../package/index.html';
       const useUrlParam = document.getElementById('useUrlParam').checked;
       if (useUrlParam) {
@@ -449,6 +460,29 @@
         packageWindow = iframe.contentWindow;
         log('Package loaded successfully', 'success');
 
+        // Intercept iframe console.log to show in test interface
+        if (packageWindow) {
+          const originalLog = packageWindow.console.log;
+          const originalError = packageWindow.console.error;
+
+          packageWindow.console.log = function(...args) {
+            originalLog.apply(packageWindow.console, args);
+            const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+            // Highlight important events
+            if (message.includes('pre-loaded') || message.includes('Pre-load complete') || message.includes('Playing pre-loaded')) {
+              log('📦 ' + message, 'success');
+            } else if (message.includes('BroadSignPlay')) {
+              log('🎬 ' + message, 'info');
+            }
+          };
+
+          packageWindow.console.error = function(...args) {
+            originalError.apply(packageWindow.console, args);
+            const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+            log('❌ ' + message, 'error');
+          };
+        }
+
         if (packageWindow) {
           // Inject BroadSignObject
           packageWindow.BroadSignObject = window.BroadSignObject;
@@ -462,6 +496,13 @@
             packageWindow.ADLOCAITE_CONFIG.fallbackEnabled = fallbackEnabled;
             packageWindow.ADLOCAITE_CONFIG.minBidCents = parseInt(minBid);
             log('Config injected into package', 'success');
+          }
+
+          // Update debug panel visibility (since initialize() already ran)
+          const debugPanel = packageWindow.document.getElementById('debug-panel');
+          if (debugPanel) {
+            debugPanel.style.display = debugMode ? 'block' : 'none';
+            log('Debug panel: ' + (debugMode ? 'shown' : 'hidden'), 'info');
           }
 
           log('BroadSignObject injected', 'success');

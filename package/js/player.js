@@ -64,7 +64,279 @@ class AdlocaitePlayer {
       throw new Error(`Container element not found: ${containerId}`);
     }
 
+    // Pre-loaded media state
+    this.preloadedVideoElement = null;
+    this.preloadedImageElement = null;
+    this.preloadedMediaFile = null;
+    this.isMediaPreloaded = false;
+
     this.log('Player initialized');
+  }
+
+  /**
+   * Pre-load media asset for instant playback
+   * Called during off-screen buffering phase, BEFORE BroadSignPlay()
+   */
+  async preloadMedia(mediaFile) {
+    this.log('Pre-loading media:', mediaFile.url);
+    this.preloadedMediaFile = mediaFile;
+
+    if (this.vastParser.isVideo(mediaFile)) {
+      await this.preloadVideo(mediaFile);
+    } else if (this.vastParser.isImage(mediaFile)) {
+      await this.preloadImage(mediaFile);
+    } else {
+      throw new Error(`Unsupported media type: ${mediaFile.type}`);
+    }
+
+    this.isMediaPreloaded = true;
+    this.log('Media pre-loaded successfully');
+  }
+
+  /**
+   * Pre-load video with proper buffering
+   * Uses canplaythrough event to ensure enough is buffered
+   */
+  async preloadVideo(mediaFile) {
+    this.log('Pre-loading video:', mediaFile.url);
+
+    return new Promise((resolve, reject) => {
+      // Create video element for pre-loading
+      this.preloadedVideoElement = document.createElement('video');
+      this.preloadedVideoElement.id = 'adlocaite-video';
+
+      // CRITICAL: Set preload="auto" for aggressive buffering
+      this.preloadedVideoElement.preload = 'auto';
+
+      // CRITICAL: muted=true required for Chromium v87+ autoplay
+      this.preloadedVideoElement.muted = true;
+      this.preloadedVideoElement.playsInline = true;
+
+      // Do NOT set autoplay - we control when it plays
+      this.preloadedVideoElement.autoplay = false;
+
+      // Set dimensions
+      if (mediaFile.width && mediaFile.height) {
+        this.preloadedVideoElement.width = mediaFile.width;
+        this.preloadedVideoElement.height = mediaFile.height;
+      }
+
+      // Timeout for pre-loading
+      const loadTimeout = setTimeout(() => {
+        cleanup();
+        this.error('Video pre-load timeout');
+        reject(new Error('Video pre-load timeout'));
+      }, this.config.assetTimeout);
+
+      // Cleanup function to remove all listeners
+      const cleanup = () => {
+        clearTimeout(loadTimeout);
+        this.preloadedVideoElement.removeEventListener('canplaythrough', onCanPlayThrough);
+        this.preloadedVideoElement.removeEventListener('error', onError);
+      };
+
+      // CRITICAL: Use canplaythrough instead of loadedmetadata
+      // canplaythrough = browser estimates it can play through without buffering
+      const onCanPlayThrough = () => {
+        cleanup();
+        this.duration = this.preloadedVideoElement.duration;
+        this.log(`Video pre-loaded. Duration: ${this.duration}s, buffered and ready`);
+        resolve();
+      };
+
+      const onError = (e) => {
+        cleanup();
+        const videoError = this.preloadedVideoElement.error;
+        this.error(`Video pre-load error: ${mediaFile.url}`, {
+          code: videoError?.code,
+          message: videoError?.message
+        });
+        reject(new Error(`Video pre-load error: ${videoError?.message || 'unknown'}`));
+      };
+
+      this.preloadedVideoElement.addEventListener('canplaythrough', onCanPlayThrough);
+      this.preloadedVideoElement.addEventListener('error', onError);
+
+      // Start loading
+      this.preloadedVideoElement.src = mediaFile.url;
+      this.preloadedVideoElement.load();
+    });
+  }
+
+  /**
+   * Pre-load image
+   */
+  async preloadImage(mediaFile) {
+    this.log('Pre-loading image:', mediaFile.url);
+
+    return new Promise((resolve, reject) => {
+      this.preloadedImageElement = document.createElement('img');
+      this.preloadedImageElement.id = 'adlocaite-image';
+
+      // Set dimensions
+      if (mediaFile.width && mediaFile.height) {
+        this.preloadedImageElement.width = mediaFile.width;
+        this.preloadedImageElement.height = mediaFile.height;
+      }
+
+      // Timeout
+      const loadTimeout = setTimeout(() => {
+        cleanup();
+        this.error('Image pre-load timeout');
+        reject(new Error('Image pre-load timeout'));
+      }, this.config.assetTimeout);
+
+      // Cleanup function to remove all listeners
+      const cleanup = () => {
+        clearTimeout(loadTimeout);
+        this.preloadedImageElement.removeEventListener('load', onLoad);
+        this.preloadedImageElement.removeEventListener('error', onError);
+      };
+
+      const onLoad = () => {
+        cleanup();
+        this.log('Image pre-loaded successfully');
+        resolve();
+      };
+
+      const onError = (e) => {
+        cleanup();
+        this.error(`Image pre-load error: ${mediaFile.url}`);
+        reject(new Error(`Image pre-load error: ${mediaFile.url}`));
+      };
+
+      this.preloadedImageElement.addEventListener('load', onLoad);
+      this.preloadedImageElement.addEventListener('error', onError);
+
+      // Start loading
+      this.preloadedImageElement.src = mediaFile.url;
+    });
+  }
+
+  /**
+   * Play pre-loaded media instantly
+   * Called when BroadSignPlay() is triggered
+   */
+  async playPreloaded(vastData, dealId) {
+    this.log('Playing pre-loaded media');
+
+    if (!this.isMediaPreloaded || !this.preloadedMediaFile) {
+      throw new Error('No pre-loaded media available');
+    }
+
+    this.currentDealId = dealId;
+    this.currentMediaFile = this.preloadedMediaFile;
+    this.duration = vastData.creative?.duration || this.duration || 0;
+
+    // Fire impression tracking
+    await this.fireTrackingEvent('impression');
+
+    // Play based on media type
+    if (this.vastParser.isVideo(this.preloadedMediaFile)) {
+      await this.playPreloadedVideo();
+    } else if (this.vastParser.isImage(this.preloadedMediaFile)) {
+      await this.playPreloadedImage();
+    }
+  }
+
+  /**
+   * Play pre-loaded video instantly
+   */
+  async playPreloadedVideo() {
+    this.log('Starting pre-loaded video playback');
+
+    if (!this.preloadedVideoElement) {
+      throw new Error('No pre-loaded video element');
+    }
+
+    return new Promise((resolve, reject) => {
+      this.videoElement = this.preloadedVideoElement;
+
+      // Add to container (video is already buffered)
+      this.containerElement.innerHTML = '';
+      this.containerElement.appendChild(this.videoElement);
+
+      // Set up playback event listeners
+      this.videoElement.addEventListener('play', () => {
+        this.isPlaying = true;
+        this.startTime = Date.now();
+        this.broadsignAdapter.startPlayback();
+        this.fireTrackingEvent('start');
+        this.log('Video playback started (instant)');
+      }, { once: true });
+
+      this.videoElement.addEventListener('timeupdate', () => {
+        this.handleVideoProgress();
+      });
+
+      this.videoElement.addEventListener('ended', async () => {
+        this.log('Video playback ended');
+        this.completionRate = 100;
+        await this.fireTrackingEvent('complete');
+        await this.confirmPlayout();
+        this.cleanup();
+        resolve();
+      }, { once: true });
+
+      this.videoElement.addEventListener('error', (e) => {
+        const videoError = this.videoElement.error;
+        this.error('Video playback error', {
+          code: videoError?.code,
+          message: videoError?.message
+        });
+        this.cleanup();
+        reject(new Error(`Video playback error: ${videoError?.message || 'unknown'}`));
+      }, { once: true });
+
+      // Start playback immediately - video is already buffered!
+      this.videoElement.play().catch(err => {
+        this.error('Failed to start video playback:', err);
+        reject(err);
+      });
+    });
+  }
+
+  /**
+   * Play pre-loaded image instantly
+   */
+  async playPreloadedImage() {
+    this.log('Starting pre-loaded image display');
+
+    if (!this.preloadedImageElement) {
+      throw new Error('No pre-loaded image element');
+    }
+
+    return new Promise((resolve) => {
+      this.imageElement = this.preloadedImageElement;
+
+      // Add to container (image is already loaded)
+      this.containerElement.innerHTML = '';
+      this.containerElement.appendChild(this.imageElement);
+
+      // Mark as playing
+      this.isPlaying = true;
+      this.startTime = Date.now();
+      this.broadsignAdapter.startPlayback();
+
+      this.fireTrackingEvent('start');
+      this.log('Image display started (instant)');
+
+      // Use duration from VAST or default to 15 seconds
+      const displayDuration = (this.duration || 15) * 1000;
+      this.log(`Displaying image for ${displayDuration}ms`);
+
+      // Simulate progress events
+      this.simulateImageProgress(displayDuration);
+
+      // Wait for duration
+      setTimeout(async () => {
+        this.completionRate = 100;
+        await this.fireTrackingEvent('complete');
+        await this.confirmPlayout();
+        this.cleanup();
+        resolve();
+      }, displayDuration);
+    });
   }
 
   /**
@@ -405,10 +677,10 @@ class AdlocaitePlayer {
    */
   cleanup() {
     this.log('Cleaning up player');
-    
+
     this.isPlaying = false;
     this.broadsignAdapter.endPlayback();
-    
+
     // Remove video element
     if (this.videoElement) {
       this.videoElement.pause();
@@ -417,12 +689,31 @@ class AdlocaitePlayer {
       this.videoElement = null;
     }
 
+    // Remove pre-loaded video element (if different from videoElement)
+    if (this.preloadedVideoElement && this.preloadedVideoElement !== this.videoElement) {
+      this.preloadedVideoElement.pause();
+      this.preloadedVideoElement.src = '';
+      this.preloadedVideoElement.remove();
+    }
+    this.preloadedVideoElement = null;
+
     // Remove image element
     if (this.imageElement) {
       this.imageElement.src = '';
       this.imageElement.remove();
       this.imageElement = null;
     }
+
+    // Remove pre-loaded image element (if different from imageElement)
+    if (this.preloadedImageElement && this.preloadedImageElement !== this.imageElement) {
+      this.preloadedImageElement.src = '';
+      this.preloadedImageElement.remove();
+    }
+    this.preloadedImageElement = null;
+
+    // Reset pre-load state
+    this.preloadedMediaFile = null;
+    this.isMediaPreloaded = false;
 
     // Reset tracking
     this.trackingFired = {
@@ -448,6 +739,7 @@ class AdlocaitePlayer {
 if (typeof window !== 'undefined') {
   window.AdlocaitePlayer = AdlocaitePlayer;
 }
+
 
 
 

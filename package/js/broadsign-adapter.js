@@ -39,13 +39,56 @@ class BroadsignAdapter {
   /**
    * Check if running in Broadsign Control Player
    * Verifies that BroadSignObject exists AND has required properties
+   * Also checks parent window for test environment support
    */
   isBroadsignEnvironment() {
-    return typeof BroadSignObject !== 'undefined' &&
-           BroadSignObject !== null &&
-           (BroadSignObject.frame_id !== undefined ||
-            BroadSignObject.display_unit_id !== undefined ||
-            BroadSignObject.player_id !== undefined);
+    // Check local BroadSignObject
+    if (typeof BroadSignObject !== 'undefined' &&
+        BroadSignObject !== null &&
+        (BroadSignObject.frame_id !== undefined ||
+         BroadSignObject.display_unit_id !== undefined ||
+         BroadSignObject.player_id !== undefined)) {
+      return true;
+    }
+
+    // Check parent window (for test environment where parent sets BroadSignObject)
+    try {
+      if (typeof parent !== 'undefined' &&
+          parent !== window &&
+          typeof parent.BroadSignObject !== 'undefined' &&
+          parent.BroadSignObject !== null &&
+          parent.BroadSignObject.frame_id !== undefined) {
+        return true;
+      }
+    } catch (e) {
+      // Cross-origin access denied - ignore
+    }
+
+    return false;
+  }
+
+  /**
+   * Get BroadSignObject from local or parent window
+   */
+  getBroadSignObject() {
+    // Check local first
+    if (typeof BroadSignObject !== 'undefined' && BroadSignObject !== null) {
+      return BroadSignObject;
+    }
+
+    // Check parent window (for test environment)
+    try {
+      if (typeof parent !== 'undefined' &&
+          parent !== window &&
+          typeof parent.BroadSignObject !== 'undefined' &&
+          parent.BroadSignObject !== null) {
+        return parent.BroadSignObject;
+      }
+    } catch (e) {
+      // Cross-origin access denied - ignore
+    }
+
+    return null;
   }
 
   /**
@@ -61,15 +104,18 @@ class BroadsignAdapter {
     // Try to get frame ID from BroadSignObject (as external_id for API)
     if (this.isBroadsignEnvironment()) {
       try {
-        // Use frame_id property (not a method!) - represents individual screen
-        this.screenId = BroadSignObject.frame_id;
+        // Use getBroadSignObject() to handle both local and parent window
+        const bsObject = this.getBroadSignObject();
+        if (bsObject) {
+          this.screenId = bsObject.frame_id;
 
-        // Validate that we got a valid screen ID
-        if (!this.screenId || this.screenId === '') {
-          this.error('BroadSignObject.frame_id is empty or undefined');
-        } else {
-          this.log(`Screen ID (frame_id) from BroadSignObject: ${this.screenId}`);
-          return this.screenId;
+          // Validate that we got a valid screen ID
+          if (!this.screenId || this.screenId === '') {
+            this.error('BroadSignObject.frame_id is empty or undefined');
+          } else {
+            this.log(`Screen ID (frame_id) from BroadSignObject: ${this.screenId}`);
+            return this.screenId;
+          }
         }
       } catch (err) {
         this.error('Failed to get frame_id from BroadSignObject', err);

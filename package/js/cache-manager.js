@@ -122,15 +122,16 @@ class CacheManager {
 
   /**
    * Prefetch a single asset
+   * Uses <img>/<video> elements instead of fetch() to avoid CORS issues
    */
   async prefetchAsset(asset) {
     const url = asset.asset_url;
-    
+
     // Check if already cached and not expired
     if (this.cachedAssets.has(url)) {
       const cached = this.cachedAssets.get(url);
       const expiresAt = new Date(asset.cache_expires_at || cached.cache_expires_at);
-      
+
       if (expiresAt > new Date()) {
         this.log(`Asset already cached and valid: ${url}`);
         return;
@@ -140,15 +141,13 @@ class CacheManager {
     this.log(`Prefetching asset: ${url}`);
 
     try {
-      // Use fetch with cache directive
-      const response = await fetch(url, {
-        method: 'GET',
-        cache: 'force-cache',
-        mode: 'cors'
-      });
+      const resourceType = this.guessResourceType(url);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (resourceType === 'video') {
+        await this.prefetchVideo(url);
+      } else {
+        // Default to image for images and unknown types
+        await this.prefetchImage(url);
       }
 
       // Store in memory map
@@ -157,25 +156,73 @@ class CacheManager {
         asset_id: asset.asset_id,
         cache_expires_at: asset.cache_expires_at,
         cached_at: new Date().toISOString(),
-        size: response.headers.get('content-length'),
-        type: response.headers.get('content-type')
+        size: null, // Can't get size without CORS
+        type: resourceType
       });
 
       this.log(`Asset cached successfully: ${url}`);
 
     } catch (err) {
-      // Provide specific error messages for CORS issues
-      if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
-        this.error(
-          `CORS or network error fetching asset: ${url}. ` +
-          `Ensure the asset server includes 'Access-Control-Allow-Origin: *' header. ` +
-          `According to Broadsign docs, remote servers MUST include this header.`,
-          err
-        );
-      } else {
-        this.error(`Failed to prefetch asset: ${url}`, err);
-      }
+      this.error(`Failed to prefetch asset: ${url}`, err);
     }
+  }
+
+  /**
+   * Prefetch image using <img> element (no CORS issues)
+   */
+  async prefetchImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+
+      const timeout = setTimeout(() => {
+        reject(new Error('Image prefetch timeout'));
+      }, this.config.assetTimeout || 20000);
+
+      img.onload = () => {
+        clearTimeout(timeout);
+        this.log(`Image prefetched: ${url}`);
+        resolve();
+      };
+
+      img.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error(`Failed to load image: ${url}`));
+      };
+
+      img.src = url;
+    });
+  }
+
+  /**
+   * Prefetch video using <video> element (no CORS issues)
+   */
+  async prefetchVideo(url) {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'auto';
+      video.muted = true;
+
+      const timeout = setTimeout(() => {
+        video.src = '';
+        reject(new Error('Video prefetch timeout'));
+      }, this.config.assetTimeout || 20000);
+
+      video.addEventListener('canplaythrough', () => {
+        clearTimeout(timeout);
+        this.log(`Video prefetched: ${url}`);
+        video.src = ''; // Release the video
+        resolve();
+      }, { once: true });
+
+      video.addEventListener('error', () => {
+        clearTimeout(timeout);
+        video.src = '';
+        reject(new Error(`Failed to load video: ${url}`));
+      }, { once: true });
+
+      video.src = url;
+      video.load();
+    });
   }
 
   /**
@@ -330,6 +377,7 @@ class CacheManager {
 if (typeof window !== 'undefined') {
   window.CacheManager = CacheManager;
 }
+
 
 
 

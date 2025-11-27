@@ -50,6 +50,12 @@
         this.initialized = false;
         this.initializing = false;
         this.initPromise = null;
+
+        // Pre-loading state - load content BEFORE BroadSignPlay()
+        this.preloadedContent = null;
+        this.preloadPromise = null;
+        this.isPreloading = false;
+        this.screenId = null;
       }
 
       /**
@@ -91,6 +97,17 @@
           this.config = window.ADLOCAITE_CONFIG;
           if (!this.config) {
             throw new Error('Configuration not found. Please create config.js from config.example.js');
+          }
+
+          // Check for test environment config from parent window (enables early pre-loading)
+          try {
+            if (typeof parent !== 'undefined' && parent !== window && parent.ADLOCAITE_TEST_CONFIG) {
+              const testConfig = parent.ADLOCAITE_TEST_CONFIG;
+              console.log('[Adlocaite] Applying test config from parent window');
+              Object.assign(this.config, testConfig);
+            }
+          } catch (e) {
+            // Cross-origin access denied - ignore
           }
 
           // Enable debug panel if needed
@@ -151,6 +168,16 @@
           this.initialized = true;
           console.log('[Adlocaite] Application initialized successfully');
 
+          // Start pre-loading content immediately (don't wait - runs in background)
+          // This happens during Broadsign's off-screen pre-buffering phase
+          this.screenId = this.broadsignAdapter.getScreenId();
+          if (this.screenId) {
+            console.log('[Adlocaite] Starting pre-load for screen:', this.screenId);
+            this.preloadPromise = this.preloadContent();
+          } else {
+            console.warn('[Adlocaite] No screen ID - pre-loading skipped');
+          }
+
         } catch (err) {
           console.error('[Adlocaite] Initialization failed:', err);
           this.showError('Initialization failed: ' + err.message);
@@ -159,7 +186,106 @@
       }
 
       /**
+       * Pre-load content during off-screen buffering phase
+       * Called automatically after initialization, BEFORE BroadSignPlay()
+       */
+      async preloadContent() {
+        if (this.isPreloading) {
+          console.log('[Adlocaite] Pre-loading already in progress');
+          return this.preloadPromise;
+        }
+
+        this.isPreloading = true;
+        console.log('[Adlocaite] Pre-loading content...');
+
+        try {
+          // Start cache manager for background asset caching
+          if (this.config.enableCaching) {
+            this.cacheManager.start(this.screenId);
+          }
+
+          // Request offer from API
+          console.log('[Adlocaite] Pre-load: Requesting offer...');
+          const offerResponse = await this.apiClient.requestOfferByExternalId(this.screenId, {
+            vast: this.config.vastMode,
+            minBidCents: this.config.minBidCents
+          });
+
+          // Check for no offers available
+          if (offerResponse && offerResponse.noOffersAvailable) {
+            console.log('[Adlocaite] Pre-load: No offers available');
+            this.preloadedContent = { noOffers: true };
+            return this.preloadedContent;
+          }
+
+          // Check for API errors
+          if (offerResponse && offerResponse.error) {
+            console.error('[Adlocaite] Pre-load: API error:', offerResponse.message);
+            this.preloadedContent = { error: true, message: offerResponse.message };
+            return this.preloadedContent;
+          }
+
+          // Parse VAST XML
+          let vastXml, offerData;
+          if (typeof offerResponse === 'string') {
+            vastXml = offerResponse;
+          } else {
+            vastXml = offerResponse.vast;
+            offerData = offerResponse;
+          }
+
+          if (!vastXml) {
+            throw new Error('No VAST XML in response');
+          }
+
+          const vastData = this.vastParser.parse(vastXml);
+          console.log('[Adlocaite] Pre-load: VAST parsed');
+
+          // Get deal ID from VAST or accept offer
+          let dealId = this.vastParser.getDealId();
+          if (!dealId && offerData && offerData.offer_id) {
+            console.log('[Adlocaite] Pre-load: Accepting offer:', offerData.offer_id);
+            const acceptResponse = await this.apiClient.acceptOffer(
+              offerData.offer_id,
+              offerData.bid_price_cents
+            );
+            dealId = acceptResponse?.deal_id;
+          }
+
+          // Get best media file
+          const mediaFile = this.vastParser.getBestMediaFile();
+          if (!mediaFile) {
+            throw new Error('No suitable media file found in VAST');
+          }
+
+          // Pre-load the media asset
+          console.log('[Adlocaite] Pre-load: Loading media asset:', mediaFile.url);
+          await this.player.preloadMedia(mediaFile);
+          console.log('[Adlocaite] Pre-load: Media asset ready');
+
+          // Store pre-loaded content
+          this.preloadedContent = {
+            vastData,
+            dealId,
+            mediaFile,
+            ready: true
+          };
+
+          console.log('[Adlocaite] Pre-load complete. Ready for instant playback.');
+          return this.preloadedContent;
+
+        } catch (err) {
+          console.error('[Adlocaite] Pre-load failed:', err);
+          this.preloadedContent = { error: true, message: err.message };
+          return this.preloadedContent;
+        } finally {
+          this.isPreloading = false;
+        }
+      }
+
+      /**
        * Start playback - called when BroadSignPlay() is triggered
+       * Uses pre-loaded content for instant playback
        */
       async start() {
         if (!this.initialized) {
@@ -167,110 +293,60 @@
           return;
         }
 
-        console.log('[Adlocaite] Starting playback...');
+        console.log('[Adlocaite] BroadSignPlay triggered - starting playback...');
 
         try {
-          // Get screen ID
-          const screenId = this.broadsignAdapter.getScreenId();
-
-          // Fail if no screen ID available
-          if (!screenId) {
-            throw new Error('No screen ID available. Package must run in Broadsign Player or provide screen_id via URL parameter.');
+          // If pre-loading didn't start (e.g., no screen ID at init time), try now
+          // This can happen in test environments where BroadSignObject is injected late
+          if (!this.preloadPromise && !this.preloadedContent) {
+            console.log('[Adlocaite] Pre-loading not started yet, attempting now...');
+            this.screenId = this.broadsignAdapter.getScreenId();
+            if (this.screenId) {
+              this.preloadPromise = this.preloadContent();
+            } else {
+              throw new Error('No screen ID available');
+            }
           }
 
-          console.log('[Adlocaite] Screen ID:', screenId);
-
-          // Start cache manager
-          if (this.config.enableCaching) {
-            this.cacheManager.start(screenId);
+          // Wait for pre-loading to complete (should already be done in most cases)
+          if (this.preloadPromise) {
+            console.log('[Adlocaite] Waiting for pre-load to complete...');
+            await this.preloadPromise;
           }
 
-          // Request offer using external ID (frame_id from Broadsign)
-          console.log('[Adlocaite] Requesting offer...');
-          const offerResponse = await this.apiClient.requestOfferByExternalId(screenId, {
-            vast: this.config.vastMode,
-            minBidCents: this.config.minBidCents
-          });
+          // Check pre-loaded content status
+          if (!this.preloadedContent) {
+            throw new Error('No pre-loaded content available');
+          }
 
-          // Check for no offers available (404 handled gracefully)
-          if (offerResponse && offerResponse.noOffersAvailable) {
+          if (this.preloadedContent.noOffers) {
             console.log('[Adlocaite] No offers available for this screen');
             throw new Error('No offers available');
           }
 
-          // Check for other API errors
-          if (offerResponse && offerResponse.error) {
-            console.error('[Adlocaite] API error:', offerResponse.message);
-            throw new Error(offerResponse.message || 'API request failed');
+          if (this.preloadedContent.error) {
+            throw new Error(this.preloadedContent.message || 'Pre-load failed');
           }
 
-          // Check if VAST XML (string) or JSON
-          let vastXml, offerData;
-
-          if (typeof offerResponse === 'string') {
-            // VAST XML response
-            vastXml = offerResponse;
-            console.log('[Adlocaite] VAST XML received');
-          } else {
-            // JSON response with VAST XML
-            vastXml = offerResponse.vast; // API returns "vast", not "vast_xml"
-            offerData = offerResponse;
-            console.log('[Adlocaite] Offer received:', offerData);
+          if (!this.preloadedContent.ready) {
+            throw new Error('Pre-loaded content not ready');
           }
 
-          if (!vastXml) {
-            throw new Error('No VAST XML in response');
-          }
+          // Play pre-loaded content immediately
+          const { vastData, dealId, mediaFile } = this.preloadedContent;
+          console.log('[Adlocaite] Playing pre-loaded content:', mediaFile.url);
 
-          // Parse VAST with specific error handling
-          let vastData;
-          try {
-            vastData = this.vastParser.parse(vastXml);
-            console.log('[Adlocaite] VAST parsed:', vastData);
-          } catch (parseErr) {
-            console.error('[Adlocaite] VAST parsing failed:', parseErr);
-            console.error('[Adlocaite] VAST XML:', vastXml.substring(0, 500));
-            throw new Error('Invalid VAST XML: ' + parseErr.message);
-          }
-
-          // Extract deal ID from VAST extensions
-          let dealId = this.vastParser.getDealId();
-          
-          // Fallback: Accept offer to get deal ID if not in VAST
-          if (!dealId && offerData && offerData.offer_id) {
-            console.log('[Adlocaite] Accepting offer:', offerData.offer_id);
-
-            try {
-              const acceptResponse = await this.apiClient.acceptOffer(
-                offerData.offer_id,
-                offerData.bid_price_cents
-              );
-
-              if (!acceptResponse || !acceptResponse.deal_id) {
-                throw new Error('Accept response missing deal_id');
-              }
-
-              dealId = acceptResponse.deal_id;
-              console.log('[Adlocaite] Offer accepted. Deal ID:', dealId);
-            } catch (acceptErr) {
-              console.error('[Adlocaite] Failed to accept offer:', acceptErr);
-              throw new Error('Offer acceptance failed: ' + acceptErr.message);
-            }
-          }
-
-          // Play media
-          console.log('[Adlocaite] Starting playback...');
-          await this.player.playFromVAST(vastData, dealId);
+          await this.player.playPreloaded(vastData, dealId);
           console.log('[Adlocaite] Playback completed successfully');
 
         } catch (err) {
           console.error('[Adlocaite] Playback failed:', err);
-          
+
           // Show fallback if enabled
           if (this.config.fallbackEnabled) {
             const message = err.message || 'Playback error';
             this.player.showFallback(message);
-            
+
             // Display fallback for a reasonable duration
             setTimeout(() => {
               console.log('[Adlocaite] Fallback display completed');

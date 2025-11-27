@@ -104,23 +104,48 @@ package/
 - Pre-caches assets for offline playback
 - Periodic refresh based on `cachingInterval` config
 
-### Execution Flow
+### Execution Flow (Pre-Loading Architecture)
 
-1. Broadsign Player loads HTML package
-2. `DOMContentLoaded` → `AdlocaiteApp.initialize()` starts (non-blocking)
-3. **Broadsign calls global `BroadSignPlay()` → waits for init if needed → triggers `AdlocaiteApp.start()`**
-   - **CRITICAL**: `BroadSignPlay()` can fire BEFORE `DOMContentLoaded`
-   - Code now handles this race condition by waiting for initialization
-4. Get screen ID from BroadSignObject
-5. Request offer from Adlocaite API (with `vast=true`)
-   - **CRITICAL**: 404 errors are handled gracefully (no throw) to prevent Broadsign auto-skip
-6. Parse VAST XML to extract media URL and tracking events
-7. Accept offer to get deal_id (if not in VAST)
-8. Play media (video or image)
-   - **CRITICAL**: Videos use `muted=true` for Chromium v87+ autoplay compatibility
-9. Fire VAST tracking events during playback
-10. Confirm playout via API with deal_id
-11. Clean up and complete
+The package uses Broadsign's off-screen pre-buffering phase to load content BEFORE display:
+
+```
+Download/Unzip    Pre-Buffering (OFF-SCREEN)         BroadSignPlay()        Display
+      │                      │                              │                   │
+      ▼                      ▼                              ▼                   ▼
+  [Package]        [DOMContentLoaded]              ["about to display"]   [SICHTBAR]
+                   [Pre-loading starts]
+                   [SECONDS before display!]
+```
+
+**Phase 1: Off-Screen Pre-Buffering (DOMContentLoaded)**
+1. Broadsign Player loads HTML package (off-screen)
+2. `DOMContentLoaded` → `AdlocaiteApp.initialize()` runs
+3. `initialize()` triggers `preloadContent()` automatically:
+   - Get screen ID from BroadSignObject (`frame_id`)
+   - Request offer from Adlocaite API (with `vast=true`)
+   - Parse VAST XML to extract media URL
+   - Accept offer to get deal_id (if not in VAST)
+   - Pre-load video (`canplaythrough`) or image
+   - Store pre-loaded content for instant playback
+
+**Phase 2: Display (BroadSignPlay)**
+4. Broadsign calls global `BroadSignPlay()` when ad copy is about to display
+5. `start()` waits for pre-loading to complete (if still running)
+6. Play pre-loaded media instantly (already buffered!)
+7. Fire VAST tracking events during playback
+8. Confirm playout via API with deal_id
+9. Clean up and complete
+
+**Key Benefits:**
+- **Instant playback**: Content is buffered before display
+- **No visible delay**: API requests happen off-screen
+- **Video buffering**: Uses `canplaythrough` event (not `loadedmetadata`)
+
+**CRITICAL Implementation Notes:**
+- `BroadSignPlay()` can fire BEFORE `DOMContentLoaded` - code handles this
+- 404 errors are handled gracefully (no throw) to prevent Broadsign auto-skip
+- Videos use `muted=true` for Chromium v87+ autoplay compatibility
+- Videos use `preload="auto"` for aggressive buffering
 
 ## Important Implementation Details
 
@@ -319,3 +344,45 @@ The following critical issues have been fixed in the codebase:
 **Configuration Required:**
 - In Adlocaite backend, set screen `external_id` field to match Broadsign `frame_id`
 - Example: Broadsign frame_id = "842292831" → Adlocaite screen external_id = "842292831"
+
+### 2025-01-27 - Pre-Loading Architecture for Instant Playback
+
+**Root Cause:** Visible delay when ad slot became visible because API requests, VAST parsing, and video loading all happened AFTER `BroadSignPlay()` was called (when the slot was already visible).
+
+**Solution:** Leverage Broadsign's off-screen pre-buffering phase (between DOMContentLoaded and BroadSignPlay) to load content BEFORE display.
+
+**Fixes Applied:**
+
+10. **Pre-Loading in initialize()** (index.html:160-273)
+    - Added `preloadContent()` method that runs during off-screen buffering
+    - API request, VAST parsing, and media loading happen BEFORE display
+    - Pre-loaded content stored in `preloadedContent` object
+    - `start()` now just plays the already-loaded content
+
+11. **Video Pre-Loading with Proper Buffering** (player.js:76-196)
+    - Added `preloadMedia()`, `preloadVideo()`, `preloadImage()` methods
+    - Videos use `preload="auto"` for aggressive buffering
+    - Changed from `loadedmetadata` to `canplaythrough` event
+    - `canplaythrough` = browser estimates it can play without buffering
+    - `autoplay=false` during pre-load, controlled start in `playPreloaded()`
+
+12. **Instant Playback Methods** (player.js:198-322)
+    - Added `playPreloaded()`, `playPreloadedVideo()`, `playPreloadedImage()`
+    - Video/image element already created and buffered
+    - Just append to DOM and call `play()` - instant start
+
+13. **Simplified start() Method** (index.html:275-335)
+    - No longer makes API requests or loads media
+    - Waits for `preloadPromise` if still running
+    - Plays pre-loaded content immediately
+
+**Timeline Improvement:**
+```
+BEFORE:
+BroadSignPlay() → API (2s) → VAST parse → Video load (3s) → Play
+                 ◄────────── 5+ seconds visible delay ──────────►
+
+AFTER:
+DOMContentLoaded → API → VAST → Video load → BroadSignPlay() → Play instantly!
+◄──────── happens off-screen ────────►       ◄── no delay ──►
+```
