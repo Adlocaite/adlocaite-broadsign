@@ -299,18 +299,6 @@
         <h3>Options</h3>
         <div class="config-field">
           <label class="checkbox">
-            <input type="checkbox" id="useUrlParam">
-            Use URL Parameter
-          </label>
-        </div>
-        <div class="config-field">
-          <label class="checkbox">
-            <input type="checkbox" id="enableCaching">
-            Enable Caching
-          </label>
-        </div>
-        <div class="config-field">
-          <label class="checkbox">
             <input type="checkbox" id="vastMode" checked>
             VAST Mode
           </label>
@@ -351,6 +339,120 @@
     let packageWindow = null;
     let titleMonitorInterval = null;
     let lastTitle = null;
+
+    // ===== URL Parameter & LocalStorage Handling =====
+
+    const STORAGE_KEY = 'adlocaite_test_config';
+
+    /**
+     * Parse URL parameters
+     * Supports: ?api_key=xxx&frame_id=yyy&resolution=1920x1080&debug=true
+     */
+    function getUrlParams() {
+      const params = new URLSearchParams(window.location.search);
+      return {
+        apiKey: params.get('api_key') || params.get('apiKey'),
+        frameId: params.get('frame_id') || params.get('frameId'),
+        resolution: params.get('resolution'),
+        vastMode: params.get('vast') || params.get('vastMode'),
+        debugMode: params.get('debug') || params.get('debugMode'),
+        minBid: params.get('min_bid') || params.get('minBid')
+      };
+    }
+
+    /**
+     * Load config from localStorage
+     */
+    function loadFromStorage() {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : {};
+      } catch (e) {
+        console.error('Failed to load from localStorage:', e);
+        return {};
+      }
+    }
+
+    /**
+     * Save config to localStorage
+     */
+    function saveToStorage() {
+      try {
+        const config = {
+          apiKey: document.getElementById('apiKey').value,
+          frameId: document.getElementById('frameId').value,
+          resolution: document.getElementById('resolution').value,
+          vastMode: document.getElementById('vastMode').checked,
+          debugMode: document.getElementById('debugMode').checked,
+          minBid: document.getElementById('minBid').value
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      } catch (e) {
+        console.error('Failed to save to localStorage:', e);
+      }
+    }
+
+    /**
+     * Initialize form with values from URL params or localStorage
+     * Priority: URL params > localStorage > Defaults
+     */
+    function initializeForm() {
+      const urlParams = getUrlParams();
+      const stored = loadFromStorage();
+
+      // API Key
+      const apiKey = urlParams.apiKey || stored.apiKey || '';
+      if (apiKey) {
+        document.getElementById('apiKey').value = apiKey;
+        log('API Key loaded from ' + (urlParams.apiKey ? 'URL params' : 'localStorage'), 'info');
+      }
+
+      // Frame ID
+      const frameId = urlParams.frameId || stored.frameId || '';
+      if (frameId) {
+        document.getElementById('frameId').value = frameId;
+        log('Frame ID loaded: ' + frameId + ' (from ' + (urlParams.frameId ? 'URL params' : 'localStorage') + ')', 'info');
+      }
+
+      // Resolution
+      const resolution = urlParams.resolution || stored.resolution || '1920x1080';
+      document.getElementById('resolution').value = resolution;
+
+      // VAST Mode (convert string 'true'/'false' to boolean)
+      const vastMode = urlParams.vastMode !== null ? (urlParams.vastMode === 'true' || urlParams.vastMode === '1') :
+                      (stored.vastMode !== undefined ? stored.vastMode : true);
+      document.getElementById('vastMode').checked = vastMode;
+
+      // Debug Mode
+      const debugMode = urlParams.debugMode !== null ? (urlParams.debugMode === 'true' || urlParams.debugMode === '1') :
+                       (stored.debugMode !== undefined ? stored.debugMode : true);
+      document.getElementById('debugMode').checked = debugMode;
+
+      // Min Bid
+      const minBid = urlParams.minBid || stored.minBid || '1';
+      document.getElementById('minBid').value = minBid;
+
+      // Show info if URL params were used
+      if (urlParams.apiKey || urlParams.frameId) {
+        log('🔗 Config loaded from URL parameters', 'success');
+      } else if (stored.apiKey || stored.frameId) {
+        log('💾 Config restored from localStorage', 'success');
+      }
+    }
+
+    /**
+     * Setup auto-save on input changes
+     */
+    function setupAutoSave() {
+      const inputs = ['apiKey', 'frameId', 'resolution', 'vastMode', 'debugMode', 'minBid'];
+      inputs.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.addEventListener('change', saveToStorage);
+          element.addEventListener('input', saveToStorage);
+        }
+      });
+    }
 
     function updateTitleDisplay(title) {
       const titleStatus = document.getElementById('titleStatus');
@@ -462,30 +564,22 @@
 
       // Update config.js with API key
       const apiKey = document.getElementById('apiKey').value;
-      const enableCaching = document.getElementById('enableCaching').checked;
       const vastMode = document.getElementById('vastMode').checked;
       const debugMode = document.getElementById('debugMode').checked;
       const minBid = document.getElementById('minBid').value;
 
-      log('Config: API Key set, Caching=' + enableCaching + ', VAST=' + vastMode + ', Debug=' + debugMode, 'info');
+      log('Config: API Key set, VAST=' + vastMode + ', Debug=' + debugMode, 'info');
 
       // Store config in parent window so iframe can access it immediately
       window.ADLOCAITE_TEST_CONFIG = {
         apiKey,
-        enableCaching,
         vastMode,
         debugMode,
         minBidCents: parseInt(minBid)
       };
       log('Config stored in parent window for early access', 'info');
 
-      let packageUrl = '../package/index.html';
-      const useUrlParam = document.getElementById('useUrlParam').checked;
-      if (useUrlParam) {
-        const screenId = document.getElementById('frameId').value;
-        packageUrl += `?screen_id=${screenId}`;
-        log('URL parameter: screen_id=' + screenId, 'info');
-      }
+      const packageUrl = '../package/index.html';
 
       const [width, height] = document.getElementById('resolution').value.split('x');
       log(`Resolution: ${width}×${height}`, 'info');
@@ -534,7 +628,6 @@
           // Update config if accessible
           if (packageWindow.ADLOCAITE_CONFIG) {
             packageWindow.ADLOCAITE_CONFIG.apiKey = apiKey;
-            packageWindow.ADLOCAITE_CONFIG.enableCaching = enableCaching;
             packageWindow.ADLOCAITE_CONFIG.vastMode = vastMode;
             packageWindow.ADLOCAITE_CONFIG.debugMode = debugMode;
             packageWindow.ADLOCAITE_CONFIG.minBidCents = parseInt(minBid);
@@ -597,9 +690,21 @@
       }
     }
 
+    // Initialize on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      initializeForm();
+      setupAutoSave();
+      log('Test suite ready', 'info');
+
+      const urlParams = getUrlParams();
+      if (urlParams.apiKey || urlParams.frameId) {
+        log('💡 TIP: Bookmark this URL to keep your config!', 'success');
+      } else {
+        log('💡 TIP: Add ?api_key=xxx&frame_id=yyy to URL for quick testing', 'info');
+      }
+    });
+
     window.addEventListener('resize', updateContentSize);
-    log('Test suite ready', 'info');
-    log('Configure settings and click "Load Package"', 'info');
   </script>
 </body>
 </html>
