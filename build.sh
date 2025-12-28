@@ -56,7 +56,6 @@ zip -r ../adlocaite-broadsign.x-html-package \
   index.html \
   js/*.js \
   css/*.css \
-  assets/* \
   -x "*.DS_Store" \
   -x "*/__pycache__/*" \
   -x "*/node_modules/*"

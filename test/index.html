@@ -322,12 +322,6 @@
           </label>
         </div>
         <div class="config-field">
-          <label class="checkbox">
-            <input type="checkbox" id="fallbackEnabled" checked>
-            Fallback Enabled
-          </label>
-        </div>
-        <div class="config-field">
           <label>Min Bid (cents):</label>
           <input type="number" id="minBid" value="1" min="0">
         </div>
@@ -340,6 +334,7 @@
         <button onclick="triggerPlay()" id="playBtn" disabled>🎬 Trigger Play</button>
         <button onclick="clearLogs()" class="danger">🗑 Clear</button>
         <span class="status ready" id="status">Ready</span>
+        <span class="status" id="titleStatus" style="margin-left: auto; background: #e5e7eb; color: #374151;">Title: —</span>
       </div>
 
       <div class="content" id="contentArea">
@@ -354,6 +349,52 @@
 
   <script>
     let packageWindow = null;
+    let titleMonitorInterval = null;
+    let lastTitle = null;
+
+    function updateTitleDisplay(title) {
+      const titleStatus = document.getElementById('titleStatus');
+      titleStatus.textContent = `Title: ${title}`;
+
+      // Color coding based on title value
+      if (title === 'ready') {
+        titleStatus.style.background = 'var(--brutalist-success-bg)';
+        titleStatus.style.color = 'var(--brutalist-success-text)';
+      } else if (title === 'wait') {
+        titleStatus.style.background = 'var(--brutalist-warning-bg)';
+        titleStatus.style.color = 'var(--brutalist-warning-text)';
+      } else if (title.startsWith('skip')) {
+        titleStatus.style.background = 'var(--brutalist-error-bg)';
+        titleStatus.style.color = 'var(--brutalist-error-text)';
+      } else {
+        titleStatus.style.background = '#e5e7eb';
+        titleStatus.style.color = '#374151';
+      }
+    }
+
+    function startTitleMonitor() {
+      // Clear any existing interval
+      if (titleMonitorInterval) {
+        clearInterval(titleMonitorInterval);
+      }
+
+      // Poll the iframe title every 200ms
+      titleMonitorInterval = setInterval(() => {
+        try {
+          const iframe = document.getElementById('packageFrame');
+          if (iframe && iframe.contentDocument) {
+            const title = iframe.contentDocument.title;
+            if (title !== lastTitle) {
+              lastTitle = title;
+              updateTitleDisplay(title);
+              log(`📋 Title changed: "${title}"`, title.startsWith('skip') ? 'error' : (title === 'ready' ? 'success' : 'info'));
+            }
+          }
+        } catch (e) {
+          // Cross-origin or other access error
+        }
+      }, 200);
+    }
 
     function setupBroadSignObject() {
       const [width, height] = document.getElementById('resolution').value.split('x');
@@ -412,6 +453,11 @@
 
     function loadPackage() {
       log('=== Loading Package ===', 'success');
+
+      // Reset title monitor
+      lastTitle = null;
+      updateTitleDisplay('—');
+
       setupBroadSignObject();
 
       // Update config.js with API key
@@ -419,7 +465,6 @@
       const enableCaching = document.getElementById('enableCaching').checked;
       const vastMode = document.getElementById('vastMode').checked;
       const debugMode = document.getElementById('debugMode').checked;
-      const fallbackEnabled = document.getElementById('fallbackEnabled').checked;
       const minBid = document.getElementById('minBid').value;
 
       log('Config: API Key set, Caching=' + enableCaching + ', VAST=' + vastMode + ', Debug=' + debugMode, 'info');
@@ -430,7 +475,6 @@
         enableCaching,
         vastMode,
         debugMode,
-        fallbackEnabled,
         minBidCents: parseInt(minBid)
       };
       log('Config stored in parent window for early access', 'info');
@@ -493,10 +537,12 @@
             packageWindow.ADLOCAITE_CONFIG.enableCaching = enableCaching;
             packageWindow.ADLOCAITE_CONFIG.vastMode = vastMode;
             packageWindow.ADLOCAITE_CONFIG.debugMode = debugMode;
-            packageWindow.ADLOCAITE_CONFIG.fallbackEnabled = fallbackEnabled;
             packageWindow.ADLOCAITE_CONFIG.minBidCents = parseInt(minBid);
             log('Config injected into package', 'success');
           }
+
+          // Start title monitoring
+          startTitleMonitor();
 
           // Update debug panel visibility (since initialize() already ran)
           const debugPanel = packageWindow.document.getElementById('debug-panel');

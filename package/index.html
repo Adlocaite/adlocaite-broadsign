@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Adlocaite Broadsign Integration</title>
+  <title>wait</title>
   
   <!-- Styles -->
   <link rel="stylesheet" href="css/styles.css">
@@ -11,10 +11,8 @@
 <body>
   <!-- Main player container -->
   <div id="adlocaite-container" class="adlocaite-container">
-    <div class="loading-screen">
-      <div class="loading-spinner"></div>
-      <div class="loading-text">Loading Adlocaite...</div>
-    </div>
+    <!-- No loading screen - content will appear when ready -->
+    <!-- Black background by default (see styles.css) -->
   </div>
 
   <!-- Debug panel (only visible in debug mode) -->
@@ -31,7 +29,6 @@
   <script src="js/broadsign-adapter.js"></script>
   <script src="js/vast-parser.js"></script>
   <script src="js/player.js"></script>
-  <script src="js/cache-manager.js"></script>
 
   <!-- Main application -->
   <script>
@@ -46,7 +43,6 @@
         this.broadsignAdapter = null;
         this.vastParser = null;
         this.player = null;
-        this.cacheManager = null;
         this.initialized = false;
         this.initializing = false;
         this.initPromise = null;
@@ -56,6 +52,24 @@
         this.preloadPromise = null;
         this.isPreloading = false;
         this.screenId = null;
+      }
+
+      /**
+       * Set Broadsign playback status via document title
+       * Broadsign checks the title to determine if content is ready or should be skipped
+       *
+       * @param {string} status - 'ready', 'wait', or 'skip'
+       * @param {string} reason - Optional reason for skip (e.g., 'no offers available')
+       */
+      setPlaybackStatus(status, reason = null) {
+        let title;
+        if (status === 'skip' && reason) {
+          title = `skip:${reason}`;
+        } else {
+          title = status;
+        }
+        document.title = title;
+        console.log(`[Adlocaite] Playback status set to: ${title}`);
       }
 
       /**
@@ -142,10 +156,6 @@
             throw new Error('Invalid maxRetries in config. Must be a non-negative number.');
           }
 
-          if (typeof this.config.cachingInterval !== 'number' || this.config.cachingInterval <= 0) {
-            throw new Error('Invalid cachingInterval in config. Must be a positive number.');
-          }
-
           // Initialize components
           this.apiClient = new AdlocaiteAPIClient(this.config);
           this.broadsignAdapter = new BroadsignAdapter(this.config);
@@ -156,7 +166,6 @@
             this.broadsignAdapter,
             this.vastParser
           );
-          this.cacheManager = new CacheManager(this.config, this.apiClient);
 
           // Initialize Broadsign adapter
           const playerInfo = this.broadsignAdapter.initialize();
@@ -180,7 +189,7 @@
 
         } catch (err) {
           console.error('[Adlocaite] Initialization failed:', err);
-          this.showError('Initialization failed: ' + err.message);
+          this.setPlaybackStatus('skip', 'init failed');
           throw err;
         }
       }
@@ -199,11 +208,6 @@
         console.log('[Adlocaite] Pre-loading content...');
 
         try {
-          // Start cache manager for background asset caching
-          if (this.config.enableCaching) {
-            this.cacheManager.start(this.screenId);
-          }
-
           // Request offer from API
           console.log('[Adlocaite] Pre-load: Requesting offer...');
           const offerResponse = await this.apiClient.requestOfferByExternalId(this.screenId, {
@@ -215,6 +219,7 @@
           if (offerResponse && offerResponse.noOffersAvailable) {
             console.log('[Adlocaite] Pre-load: No offers available');
             this.preloadedContent = { noOffers: true };
+            this.setPlaybackStatus('skip', 'no offers available');
             return this.preloadedContent;
           }
 
@@ -222,6 +227,7 @@
           if (offerResponse && offerResponse.error) {
             console.error('[Adlocaite] Pre-load: API error:', offerResponse.message);
             this.preloadedContent = { error: true, message: offerResponse.message };
+            this.setPlaybackStatus('skip', 'api error');
             return this.preloadedContent;
           }
 
@@ -271,12 +277,15 @@
             ready: true
           };
 
+          // Signal to Broadsign that content is ready
+          this.setPlaybackStatus('ready');
           console.log('[Adlocaite] Pre-load complete. Ready for instant playback.');
           return this.preloadedContent;
 
         } catch (err) {
           console.error('[Adlocaite] Pre-load failed:', err);
           this.preloadedContent = { error: true, message: err.message };
+          this.setPlaybackStatus('skip', 'preload failed');
           return this.preloadedContent;
         } finally {
           this.isPreloading = false;
@@ -304,6 +313,7 @@
             if (this.screenId) {
               this.preloadPromise = this.preloadContent();
             } else {
+              this.setPlaybackStatus('skip', 'no screen id');
               throw new Error('No screen ID available');
             }
           }
@@ -342,18 +352,12 @@
         } catch (err) {
           console.error('[Adlocaite] Playback failed:', err);
 
-          // Show fallback if enabled
-          if (this.config.fallbackEnabled) {
-            const message = err.message || 'Playback error';
-            this.player.showFallback(message);
-
-            // Display fallback for a reasonable duration
-            setTimeout(() => {
-              console.log('[Adlocaite] Fallback display completed');
-            }, 15000);
-          } else {
-            this.showError('Playback failed: ' + err.message);
+          // Ensure skip signal is set (may already be set from preload)
+          // This signals Broadsign to move to next item in waterfall
+          if (document.title !== 'skip' && !document.title.startsWith('skip:')) {
+            this.setPlaybackStatus('skip', err.message || 'playback failed');
           }
+          // Skip signal tells Broadsign to move to next item - no fallback needed
         }
       }
 
@@ -431,6 +435,7 @@
         await app.start();
       } catch (err) {
         console.error('[Adlocaite] Start failed:', err);
+        app.setPlaybackStatus('skip', err.message || 'start failed');
       }
     };
 
@@ -455,6 +460,7 @@
         await app.start();
       } catch (err) {
         console.error('[Adlocaite] Start failed:', err);
+        app.setPlaybackStatus('skip', err.message || 'start failed');
       }
     });
 

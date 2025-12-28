@@ -148,6 +148,7 @@ class BroadsignAdapter {
 
   /**
    * Get display unit ID from Broadsign
+   * Uses BroadSignObject.display_unit_id property (not a method)
    */
   getDisplayUnitId() {
     if (this.displayUnitId) {
@@ -156,13 +157,14 @@ class BroadsignAdapter {
 
     if (this.isBroadsignEnvironment()) {
       try {
-        if (typeof BroadSignObject.getDisplayUnitId === 'function') {
-          this.displayUnitId = BroadSignObject.getDisplayUnitId();
+        const bsObject = this.getBroadSignObject();
+        if (bsObject && bsObject.display_unit_id !== undefined) {
+          this.displayUnitId = bsObject.display_unit_id;
           this.log(`Display Unit ID: ${this.displayUnitId}`);
           return this.displayUnitId;
         }
       } catch (err) {
-        this.log('getDisplayUnitId not available', err);
+        this.error('Failed to get display_unit_id from BroadSignObject', err);
       }
     }
 
@@ -171,6 +173,7 @@ class BroadsignAdapter {
 
   /**
    * Get player ID from Broadsign
+   * Uses BroadSignObject.player_id property (not a method)
    */
   getPlayerId() {
     if (this.playerId) {
@@ -179,13 +182,14 @@ class BroadsignAdapter {
 
     if (this.isBroadsignEnvironment()) {
       try {
-        if (typeof BroadSignObject.getPlayerId === 'function') {
-          this.playerId = BroadSignObject.getPlayerId();
+        const bsObject = this.getBroadSignObject();
+        if (bsObject && bsObject.player_id !== undefined) {
+          this.playerId = bsObject.player_id;
           this.log(`Player ID: ${this.playerId}`);
           return this.playerId;
         }
       } catch (err) {
-        this.log('getPlayerId not available', err);
+        this.error('Failed to get player_id from BroadSignObject', err);
       }
     }
 
