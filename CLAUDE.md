@@ -80,7 +80,7 @@ package/
 
 **AdlocaiteAPIClient** (adlocaite-api.js):
 - Handles all HTTP communication with Adlocaite API
-- Methods: `requestOfferByExternalId()`, `acceptOffer()`, `rejectOffer()`, `confirmPlayout()`, `getCacheableAssetsByExternalId()`
+- Methods: `requestOfferByExternalId()`, `acceptOffer()`, `rejectOffer()`, `confirmPlayout()`
 - Uses External ID endpoints to support Broadsign frame_id as screen identifier
 - Implements retry logic with exponential backoff
 - Request timeout handling (default: 10s)
