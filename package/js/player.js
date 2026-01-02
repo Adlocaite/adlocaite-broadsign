@@ -94,8 +94,9 @@ class AdlocaitePlayer {
   }
 
   /**
-   * Pre-load video with proper buffering
-   * Uses canplaythrough event to ensure enough is buffered
+   * Pre-load video with loadedmetadata event
+   * Faster than canplaythrough - starts playback as soon as metadata is loaded
+   * Video will continue buffering during playback if needed
    */
   async preloadVideo(mediaFile) {
     this.log('Pre-loading video:', mediaFile.url);
@@ -131,16 +132,17 @@ class AdlocaitePlayer {
       // Cleanup function to remove all listeners
       const cleanup = () => {
         clearTimeout(loadTimeout);
-        this.preloadedVideoElement.removeEventListener('canplaythrough', onCanPlayThrough);
+        this.preloadedVideoElement.removeEventListener('loadedmetadata', onLoadedMetadata);
         this.preloadedVideoElement.removeEventListener('error', onError);
       };
 
-      // CRITICAL: Use canplaythrough instead of loadedmetadata
-      // canplaythrough = browser estimates it can play through without buffering
-      const onCanPlayThrough = () => {
+      // Use loadedmetadata instead of canplaythrough for faster pre-loading
+      // This allows instant playback start while video continues buffering
+      // Better for Broadsign's "several seconds" pre-buffer window
+      const onLoadedMetadata = () => {
         cleanup();
         this.duration = this.preloadedVideoElement.duration;
-        this.log(`Video pre-loaded. Duration: ${this.duration}s, buffered and ready`);
+        this.log(`Video pre-loaded. Duration: ${this.duration}s, metadata ready`);
         resolve();
       };
 
@@ -154,7 +156,7 @@ class AdlocaitePlayer {
         reject(new Error(`Video pre-load error: ${videoError?.message || 'unknown'}`));
       };
 
-      this.preloadedVideoElement.addEventListener('canplaythrough', onCanPlayThrough);
+      this.preloadedVideoElement.addEventListener('loadedmetadata', onLoadedMetadata);
       this.preloadedVideoElement.addEventListener('error', onError);
 
       // Start loading
@@ -656,20 +658,6 @@ class AdlocaitePlayer {
       this.error('Failed to confirm playout', err);
       // Don't throw - playout confirmation failures shouldn't stop player
     }
-  }
-
-  /**
-   * Show fallback content
-   */
-  showFallback(message = 'No ads available') {
-    this.log('Showing fallback', message);
-    
-    this.containerElement.innerHTML = `
-      <div class="adlocaite-fallback">
-        <img src="assets/fallback.jpg" alt="Fallback content" class="fallback-image" />
-        <div class="fallback-message">${message}</div>
-      </div>
-    `;
   }
 
   /**

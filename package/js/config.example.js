@@ -31,32 +31,11 @@ const ADLOCAITE_CONFIG = {
   minBidCents: 100,
 
   /**
-   * Enable asset pre-caching
-   * When enabled, the player will periodically fetch cacheable assets
-   * and store them in browser cache for offline playback
-   */
-  enableCaching: true,
-
-  /**
-   * Caching interval in milliseconds
-   * How often to refresh the cache with new assets
-   * Default: 300000 (5 minutes)
-   */
-  cachingInterval: 300000,
-
-  /**
    * VAST mode
    * When true, requests will include vast=true parameter to receive VAST XML
    * VAST provides automatic tracking and better player compatibility
    */
   vastMode: true,
-
-  /**
-   * Enable fallback content
-   * When enabled, shows fallback image if no offers are available
-   * When disabled, shows blank screen on 404
-   */
-  fallbackEnabled: true,
 
   /**
    * Debug mode
@@ -74,8 +53,9 @@ const ADLOCAITE_CONFIG = {
   /**
    * Asset loading timeout in milliseconds
    * How long to wait for media assets to load
+   * Reduced to 5s to fit within Broadsign's "several seconds" pre-buffer window
    */
-  assetTimeout: 20000,
+  assetTimeout: 5000,
 
   /**
    * Maximum lifecycle duration in milliseconds

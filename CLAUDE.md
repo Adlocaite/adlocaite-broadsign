@@ -42,7 +42,8 @@ Key configuration options in `config.js`:
 - `minBidCents`: Minimum bid threshold
 - `vastMode`: Enable VAST XML response format
 - `debugMode`: Enable console logging
-- `enableCaching`: Enable asset pre-caching
+
+Note: Fallback handling is done via Broadsign's skip signal mechanism (see "Error Handling & Waterfall Skip Signal" section). Configure fallback content in Broadsign's Fallback Bundle, not in this package.
 
 ## Architecture
 
@@ -59,10 +60,8 @@ package/
 │   ├── broadsign-adapter.js   # BroadsignAdapter class - Broadsign API integration
 │   ├── adlocaite-api.js       # AdlocaiteAPIClient class - REST API client
 │   ├── vast-parser.js         # VASTParser class - VAST XML parsing
-│   ├── player.js              # AdlocaitePlayer class - Media playback
-│   └── cache-manager.js       # CacheManager class - Asset pre-caching
-├── css/styles.css
-└── assets/fallback.jpg
+│   └── player.js              # AdlocaitePlayer class - Media playback
+└── css/styles.css
 ```
 
 ### Key Classes & Responsibilities
@@ -81,7 +80,7 @@ package/
 
 **AdlocaiteAPIClient** (adlocaite-api.js):
 - Handles all HTTP communication with Adlocaite API
-- Methods: `requestOfferByExternalId()`, `acceptOffer()`, `rejectOffer()`, `confirmPlayout()`, `getCacheableAssetsByExternalId()`
+- Methods: `requestOfferByExternalId()`, `acceptOffer()`, `rejectOffer()`, `confirmPlayout()`
 - Uses External ID endpoints to support Broadsign frame_id as screen identifier
 - Implements retry logic with exponential backoff
 - Request timeout handling (default: 10s)
@@ -98,11 +97,6 @@ package/
 - HTML5 `<video>` for video files, `<img>` with timed duration for images
 - Fires VAST tracking events (impression, start, quartiles, complete)
 - Calls `confirmPlayout()` via API after playback completion
-- Manages fallback content display
-
-**CacheManager** (cache-manager.js):
-- Pre-caches assets for offline playback
-- Periodic refresh based on `cachingInterval` config
 
 ### Execution Flow (Pre-Loading Architecture)
 
@@ -125,7 +119,7 @@ Download/Unzip    Pre-Buffering (OFF-SCREEN)         BroadSignPlay()        Disp
    - Request offer from Adlocaite API (with `vast=true`)
    - Parse VAST XML to extract media URL
    - Accept offer to get deal_id (if not in VAST)
-   - Pre-load video (`canplaythrough`) or image
+   - Pre-load video (`loadedmetadata`) or image
    - Store pre-loaded content for instant playback
 
 **Phase 2: Display (BroadSignPlay)**
@@ -139,13 +133,16 @@ Download/Unzip    Pre-Buffering (OFF-SCREEN)         BroadSignPlay()        Disp
 **Key Benefits:**
 - **Instant playback**: Content is buffered before display
 - **No visible delay**: API requests happen off-screen
-- **Video buffering**: Uses `canplaythrough` event (not `loadedmetadata`)
+- **Fast pre-loading**: Uses `loadedmetadata` event for quick video initialization
+- **No loading screen**: Black background prevents visible loading states
 
 **CRITICAL Implementation Notes:**
 - `BroadSignPlay()` can fire BEFORE `DOMContentLoaded` - code handles this
 - 404 errors are handled gracefully (no throw) to prevent Broadsign auto-skip
 - Videos use `muted=true` for Chromium v87+ autoplay compatibility
 - Videos use `preload="auto"` for aggressive buffering
+- Videos use `loadedmetadata` event (not `canplaythrough`) for faster pre-loading within Broadsign's "several seconds" pre-buffer window
+- No loading screen in HTML - black background only to prevent visible loading states
 
 ## Important Implementation Details
 
@@ -210,9 +207,41 @@ The typical API flow is:
 - Tracking events: impression (fired before playback), start, firstQuartile, midpoint, thirdQuartile, complete
 - Tracking pixels are fired via Image() objects with 5s timeout
 
-### Error Handling
+### Error Handling & Waterfall Skip Signal
 
-- If offer request fails (404), show fallback if `fallbackEnabled: true`
+**Skip Signal Mechanism (for Programmatic Waterfall):**
+
+The package uses Broadsign's `<title>` tag mechanism to signal skip status:
+
+| Title Value | Meaning |
+|-------------|---------|
+| `wait` | Still loading (initial state) |
+| `ready` | Content loaded, ready to play |
+| `skip` | Skip to next item in waterfall |
+| `skip:reason` | Skip with reason (e.g., `skip:no offers available`) |
+
+Broadsign checks the title 1 second after page load (max 2 seconds). If `skip`, Broadsign moves to the next item in the programmatic waterfall (e.g., another SSP or fallback bundle).
+
+**When Skip is Signaled:**
+- `skip:no offers available` - API returned 404 (no offers)
+- `skip:api error` - API returned an error
+- `skip:no screen id` - No screen ID available
+- `skip:init failed` - Initialization failed
+- `skip:preload failed` - Pre-loading failed
+
+**Implementation:**
+```javascript
+// Set status via setPlaybackStatus() method
+app.setPlaybackStatus('ready');           // Content ready
+app.setPlaybackStatus('skip', 'reason');  // Skip with reason
+```
+
+**Fallback Behavior:**
+- Skip signal is the ONLY mechanism - no in-package fallback
+- Fallback bundle must be configured in Broadsign Control
+- When skip is signaled, Broadsign moves to next waterfall item or shows fallback bundle
+
+**Error Handling:**
 - API retries (3x with exponential backoff) on 5xx errors and network failures
 - Tracking failures don't stop playback (logged but not thrown)
 - Playout confirmation failures are logged but don't throw errors
@@ -279,7 +308,7 @@ Expected log sequence:
 ## File Modification Notes
 
 - `index.html`: Contains main orchestration logic in inline `<script>` - keep it clean and delegate to modules
-- Module files are loaded in order: config → api → adapter → vast → player → cache
+- Module files are loaded in order: config → api → adapter → vast → player
 - Global classes are exposed via `window.ClassName` for cross-module access
 - Build scripts zip the entire `package/` directory - avoid adding unnecessary files
 
@@ -305,11 +334,7 @@ The following critical issues have been fixed in the codebase:
    - `isBroadsignEnvironment()` now verifies object is fully initialized
    - Checks for null and property availability
 
-5. **CORS Error Messages** (cache-manager.js:167-177)
-   - Better error messages when CORS headers are missing
-   - References Broadsign requirement for `Access-Control-Allow-Origin: *`
-
-6. **BroadSignPlay() Idempotency** (broadsign-adapter.js:271-277)
+5. **BroadSignPlay() Idempotency** (broadsign-adapter.js:271-277)
    - Prevents duplicate execution if called multiple times
    - Follows Broadsign best practices
 
@@ -325,18 +350,17 @@ The following critical issues have been fixed in the codebase:
 
 **Fixes Applied:**
 
-7. **BroadSignObject Property Access** (broadsign-adapter.js:54-77)
+6. **BroadSignObject Property Access** (broadsign-adapter.js:54-77)
    - Changed from `BroadSignObject.getScreenId()` to `BroadSignObject.frame_id`
    - Changed from method calls to direct property access
    - `frame_id` represents individual screen/frame in Broadsign
 
-8. **External ID API Endpoints** (index.html:184, cache-manager.js:96)
+7. **External ID API Endpoints** (index.html:184)
    - Switched from `/offers/request/{screenId}` to `/offers/request/external-id/{externalId}`
-   - Switched from `/screens/{screenId}/cacheable-assets` to `/screens/external-id/{externalId}/cacheable-assets`
    - External ID endpoints accept any string (not just UUIDs)
    - Allows Broadsign `frame_id` to be used directly as screen identifier
 
-9. **500 Error Graceful Handling** (adlocaite-api.js:119-138)
+8. **500 Error Graceful Handling** (adlocaite-api.js:119-138)
    - 500 errors with "screen not found" messages now handled gracefully
    - Returns `{noOffersAvailable: true}` instead of throwing
    - Prevents Broadsign auto-skip when screen is not registered
@@ -362,8 +386,7 @@ The following critical issues have been fixed in the codebase:
 11. **Video Pre-Loading with Proper Buffering** (player.js:76-196)
     - Added `preloadMedia()`, `preloadVideo()`, `preloadImage()` methods
     - Videos use `preload="auto"` for aggressive buffering
-    - Changed from `loadedmetadata` to `canplaythrough` event
-    - `canplaythrough` = browser estimates it can play without buffering
+    - Initially used `canplaythrough` event for full buffering
     - `autoplay=false` during pre-load, controlled start in `playPreloaded()`
 
 12. **Instant Playback Methods** (player.js:198-322)
@@ -386,3 +409,140 @@ AFTER:
 DOMContentLoaded → API → VAST → Video load → BroadSignPlay() → Play instantly!
 ◄──────── happens off-screen ────────►       ◄── no delay ──►
 ```
+
+### 2025-01-18 - Loading Screen Optimization
+
+**Root Cause:** Customers reported seeing loading screen on displays. Investigation revealed:
+- Broadsign pre-buffers HTML pages "several seconds before" display (off-screen)
+- Loading screen was hardcoded in HTML and visible when page became visible
+- `canplaythrough` event took too long (2-15s) to resolve
+- Loading screen only removed at `playPreloaded()`, not when `ready` signal was set
+
+**Solution:** Remove visible loading states and optimize pre-loading timing.
+
+**Fixes Applied:**
+
+14. **Loading Screen Removal** (index.html:13-16)
+    - Removed hardcoded loading screen HTML
+    - Black background by default (no visible loading state)
+    - Content appears when ready, no intermediate spinner
+
+15. **Faster Video Pre-Loading** (player.js:96-166)
+    - Changed from `canplaythrough` to `loadedmetadata` event
+    - Reduces pre-load time from 2-15s to typically <1s
+    - Video starts playback immediately, continues buffering if needed
+    - Better fit for Broadsign's "several seconds" pre-buffer window
+
+16. **Reduced Timeouts** (config.example.js:72)
+    - Asset timeout reduced from 20s to 5s
+    - Fits within typical pre-buffer window
+    - Faster skip on slow networks instead of visible loading
+
+**Impact:**
+- No visible loading states for end users
+- Faster content readiness signal to Broadsign
+- Better alignment with Broadsign's pre-buffering architecture
+
+### 2025-01-27 - Programmatic Waterfall Skip Signal
+
+**Feature:** Signal to Broadsign when no content is available, allowing automatic skip to next item in waterfall (e.g., another SSP).
+
+**Implementation:**
+
+14. **Title-Based Skip Signaling** (index.html)
+    - Initial `<title>wait</title>` signals "still loading"
+    - `setPlaybackStatus('ready')` when content is pre-loaded
+    - `setPlaybackStatus('skip', 'reason')` on errors
+    - Broadsign checks title 1 second after page load
+
+15. **Skip Signal Points:**
+    - `preloadContent()`: Sets `skip:no offers available` or `skip:api error`
+    - `start()`: Sets `skip:no screen id` if screen ID missing
+    - `_performInitialization()`: Sets `skip:init failed` on init errors
+    - Error handlers: Ensure skip is set if not already
+
+**Waterfall Behavior:**
+```
+Position 1: Our HTML package → no offers → skip:no offers
+Position 2: Other SSP → handles request
+Position 3: Fallback bundle → plays if all SSPs fail
+```
+
+**Documentation Reference:**
+https://docs.broadsign.com/broadsign-ayuda/skipping-html-based-spots.html
+
+### 2025-12-28 - CacheManager Removal
+
+**Root Cause:** The CacheManager implementation was based on a flawed assumption about the Broadsign HTML5 package lifecycle.
+
+**The Problem:**
+
+The CacheManager used `setInterval()` to periodically refresh cached assets every 5 minutes:
+
+```javascript
+this.cacheInterval = setInterval(() => {
+  this.updateCache();
+}, 300000); // 5 minutes
+```
+
+**However, the actual Broadsign lifecycle is:**
+```
+Ad Copy Playback Start → HTML Page Load (new instance)
+                      → DOMContentLoaded
+                      → CacheManager.start() + setInterval(5 min)
+                      → Pre-Loading (~2-10 seconds)
+                      → BroadSignPlay() → Display (~30-120 seconds)
+                      → Ad Ends → Page Unloaded
+                                → setInterval destroyed (NEVER fired!)
+```
+
+**Key Issues:**
+
+1. **setInterval never fires**: Ad copies typically run for 30-120 seconds, but `setInterval` was set to 5 minutes. The page is unloaded before the interval ever triggers.
+
+2. **Unnecessary API calls on every playback**: Each new page instance called `GET /cacheable-assets` on initialization, even though the interval logic never ran.
+
+3. **JavaScript state doesn't persist**: The `cachedAssets` Map is destroyed when the page unloads. No state persists between ad copy displays.
+
+4. **Browser HTTP cache already works**: Chromium's built-in HTTP cache automatically persists between page loads, making the CacheManager redundant.
+
+**How Browser Caching Actually Works:**
+
+```
+First Ad Display (09:00):
+  → Request offer → video.mp4 URL
+  → Browser downloads and caches video.mp4 (via HTTP Cache-Control headers)
+  → Page unloads
+
+Second Ad Display (09:10):
+  → New page instance (fresh JavaScript state)
+  → Request offer → SAME video.mp4 URL
+  → Browser: "I have this in cache!" → 304 Not Modified
+  → Instant load from cache, no download needed
+```
+
+**This happens automatically without any CacheManager code!**
+
+**Decision: Complete Removal**
+
+17. **Removed CacheManager module** (2025-12-28)
+    - Deleted `cache-manager.js` file entirely
+    - Removed CacheManager instantiation from `index.html`
+    - Removed `enableCaching` and `cachingInterval` from config
+    - Removed `/cacheable-assets` API endpoint calls
+
+**Why This Is Better:**
+
+- ✅ **Simpler architecture**: Less code to maintain, fewer failure points
+- ✅ **Better performance**: No unnecessary API calls on every playback
+- ✅ **Browser cache works automatically**: Chromium handles caching natively
+- ✅ **Offline resilience maintained**: Browser HTTP cache persists between loads
+- ✅ **Reduced API load**: No periodic cache refresh requests
+
+**For Publishers:**
+
+Asset caching still works perfectly through standard browser mechanisms:
+- Ensure CDN assets have proper `Cache-Control` headers
+- Videos/images are automatically cached by Chromium
+- Cache persists across page reloads (between ad displays)
+- No special configuration needed

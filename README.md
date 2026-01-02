@@ -40,9 +40,7 @@ Edit `package/js/config.js`:
 | `apiKey` | Publisher API key (required) | - |
 | `apiBaseUrl` | API endpoint (staging/production) | Staging |
 | `vastMode` | Enable VAST XML | `true` |
-| `debugMode` | Enable detailed logging | `true` |
-| `fallbackEnabled` | Show fallback on no offers | `true` |
-| `enableCaching` | Asset pre-caching | `true` |
+| `debugMode` | Enable detailed logging | `false` |
 
 ## Screen Registration
 
