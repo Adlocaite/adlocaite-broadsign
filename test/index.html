@@ -285,6 +285,13 @@
           <label>API Key:</label>
           <input type="password" id="apiKey" value="" placeholder="pub_xxxx">
         </div>
+        <div class="config-field">
+          <label>API Environment:</label>
+          <select id="apiEnvironment">
+            <option value="https://staging.api.adlocaite.com/functions/v1/api">Staging</option>
+            <option value="https://api.adlocaite.com/functions/v1/api">Production</option>
+          </select>
+        </div>
       </div>
 
       <div class="config-section">
@@ -346,7 +353,7 @@
 
     /**
      * Parse URL parameters
-     * Supports: ?api_key=xxx&frame_id=yyy&resolution=1920x1080&debug=true
+     * Supports: ?api_key=xxx&frame_id=yyy&resolution=1920x1080&debug=true&env=staging
      */
     function getUrlParams() {
       const params = new URLSearchParams(window.location.search);
@@ -356,7 +363,8 @@
         resolution: params.get('resolution'),
         vastMode: params.get('vast') || params.get('vastMode'),
         debugMode: params.get('debug') || params.get('debugMode'),
-        minBid: params.get('min_bid') || params.get('minBid')
+        minBid: params.get('min_bid') || params.get('minBid'),
+        environment: params.get('env') || params.get('environment')
       };
     }
 
@@ -384,7 +392,8 @@
           resolution: document.getElementById('resolution').value,
           vastMode: document.getElementById('vastMode').checked,
           debugMode: document.getElementById('debugMode').checked,
-          minBid: document.getElementById('minBid').value
+          minBid: document.getElementById('minBid').value,
+          apiEnvironment: document.getElementById('apiEnvironment').value
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
       } catch (e) {
@@ -432,6 +441,17 @@
       const minBid = urlParams.minBid || stored.minBid || '1';
       document.getElementById('minBid').value = minBid;
 
+      // API Environment
+      let apiEnvironment = stored.apiEnvironment || 'https://staging.api.adlocaite.com/functions/v1/api';
+      if (urlParams.environment === 'staging') {
+        apiEnvironment = 'https://staging.api.adlocaite.com/functions/v1/api';
+      } else if (urlParams.environment === 'production' || urlParams.environment === 'prod') {
+        apiEnvironment = 'https://api.adlocaite.com/functions/v1/api';
+      } else if (urlParams.environment && urlParams.environment.startsWith('http')) {
+        apiEnvironment = urlParams.environment;
+      }
+      document.getElementById('apiEnvironment').value = apiEnvironment;
+
       // Show info if URL params were used
       if (urlParams.apiKey || urlParams.frameId) {
         log('🔗 Config loaded from URL parameters', 'success');
@@ -444,7 +464,7 @@
      * Setup auto-save on input changes
      */
     function setupAutoSave() {
-      const inputs = ['apiKey', 'frameId', 'resolution', 'vastMode', 'debugMode', 'minBid'];
+      const inputs = ['apiKey', 'frameId', 'resolution', 'vastMode', 'debugMode', 'minBid', 'apiEnvironment'];
       inputs.forEach(id => {
         const element = document.getElementById(id);
         if (element) {
@@ -567,12 +587,15 @@
       const vastMode = document.getElementById('vastMode').checked;
       const debugMode = document.getElementById('debugMode').checked;
       const minBid = document.getElementById('minBid').value;
+      const apiBaseUrl = document.getElementById('apiEnvironment').value;
 
-      log('Config: API Key set, VAST=' + vastMode + ', Debug=' + debugMode, 'info');
+      const envName = apiBaseUrl.includes('staging') ? 'Staging' : 'Production';
+      log('Config: ' + envName + ', API Key set, VAST=' + vastMode + ', Debug=' + debugMode, 'info');
 
       // Store config in parent window so iframe can access it immediately
       window.ADLOCAITE_TEST_CONFIG = {
         apiKey,
+        apiBaseUrl,
         vastMode,
         debugMode,
         minBidCents: parseInt(minBid)
@@ -628,6 +651,7 @@
           // Update config if accessible
           if (packageWindow.ADLOCAITE_CONFIG) {
             packageWindow.ADLOCAITE_CONFIG.apiKey = apiKey;
+            packageWindow.ADLOCAITE_CONFIG.apiBaseUrl = apiBaseUrl;
             packageWindow.ADLOCAITE_CONFIG.vastMode = vastMode;
             packageWindow.ADLOCAITE_CONFIG.debugMode = debugMode;
             packageWindow.ADLOCAITE_CONFIG.minBidCents = parseInt(minBid);
