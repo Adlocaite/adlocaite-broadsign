@@ -95,30 +95,43 @@ class BroadsignAdapter {
    * Get screen ID from Broadsign
    * Uses BroadSignObject.frame_id as external identifier
    * Falls back to configured fallback or generates a test ID
+   *
+   * IMPORTANT: Does NOT cache the result - always queries BroadSignObject fresh
+   * This ensures we detect if BroadSignObject becomes available later
    */
   getScreenId() {
-    if (this.screenId) {
-      return this.screenId;
-    }
-
-    // Try to get frame ID from BroadSignObject (as external_id for API)
+    // Try to get screen ID from BroadSignObject with fallback chain
+    // Hierarchy: frame_id (best for multi-frame) → display_unit_id (physical screen) → player_id (last resort)
     if (this.isBroadsignEnvironment()) {
       try {
         // Use getBroadSignObject() to handle both local and parent window
         const bsObject = this.getBroadSignObject();
         if (bsObject) {
-          this.screenId = bsObject.frame_id;
-
-          // Validate that we got a valid screen ID
-          if (!this.screenId || this.screenId === '') {
-            this.error('BroadSignObject.frame_id is empty or undefined');
-          } else {
-            this.log(`Screen ID (frame_id) from BroadSignObject: ${this.screenId}`);
-            return this.screenId;
+          // 1. Try frame_id (best for multi-frame setups, requires "Append Frame Id" config)
+          if (bsObject.frame_id != null && String(bsObject.frame_id).trim() !== '') {
+            const screenId = String(bsObject.frame_id);
+            this.log(`Screen ID (frame_id) from BroadSignObject: ${screenId}`);
+            return screenId;
           }
+
+          // 2. Fallback: display_unit_id (physical screen - always available)
+          if (bsObject.display_unit_id != null && String(bsObject.display_unit_id).trim() !== '') {
+            const screenId = String(bsObject.display_unit_id);
+            this.log(`Screen ID (display_unit_id) from BroadSignObject: ${screenId} (frame_id not available)`);
+            return screenId;
+          }
+
+          // 3. Last resort: player_id (hardware - always available)
+          if (bsObject.player_id != null && String(bsObject.player_id).trim() !== '') {
+            const screenId = String(bsObject.player_id);
+            this.log(`Screen ID (player_id) from BroadSignObject: ${screenId} (frame_id and display_unit_id not available)`);
+            return screenId;
+          }
+
+          this.error('BroadSignObject exists but frame_id, display_unit_id, and player_id are all empty');
         }
       } catch (err) {
-        this.error('Failed to get frame_id from BroadSignObject', err);
+        this.error('Failed to get screen ID from BroadSignObject', err);
       }
     } else {
       this.log('Not running in Broadsign environment - BroadSignObject not available');
@@ -127,17 +140,16 @@ class BroadsignAdapter {
     // Fallback: Check for URL parameter
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('screen_id')) {
-      this.screenId = urlParams.get('screen_id');
-      this.log(`Screen ID from URL parameter: ${this.screenId}`);
-      return this.screenId;
+      const screenId = urlParams.get('screen_id');
+      this.log(`Screen ID from URL parameter: ${screenId}`);
+      return screenId;
     }
 
     // Fallback: Check localStorage
     const storedScreenId = localStorage.getItem('adlocaite_screen_id');
     if (storedScreenId) {
-      this.screenId = storedScreenId;
-      this.log(`Screen ID from localStorage: ${this.screenId}`);
-      return this.screenId;
+      this.log(`Screen ID from localStorage: ${storedScreenId}`);
+      return storedScreenId;
     }
 
     // No screen ID available - return null

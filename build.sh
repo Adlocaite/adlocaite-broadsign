@@ -55,6 +55,7 @@ fi
 zip -r ../adlocaite-broadsign.x-html-package \
   index.html \
   js/*.js \
+  js/vendor/*.js \
   css/*.css \
   -x "*.DS_Store" \
   -x "*/__pycache__/*" \

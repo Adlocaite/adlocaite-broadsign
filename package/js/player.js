@@ -230,8 +230,9 @@ class AdlocaitePlayer {
     this.currentMediaFile = this.preloadedMediaFile;
     this.duration = vastData.creative?.duration || this.duration || 0;
 
-    // Fire impression tracking
-    await this.fireTrackingEvent('impression');
+    // Fire impression tracking NON-BLOCKING (fire and forget)
+    // CRITICAL: No await! Tracking must not delay video playback
+    this.fireTrackingEvent('impression');
 
     // Play based on media type
     if (this.vastParser.isVideo(this.preloadedMediaFile)) {
@@ -346,10 +347,10 @@ class AdlocaitePlayer {
    */
   async playFromVAST(vastData, dealId) {
     this.log('Playing from VAST data');
-    
+
     this.currentDealId = dealId;
     const mediaFile = this.vastParser.getBestMediaFile();
-    
+
     if (!mediaFile) {
       throw new Error('No suitable media file found in VAST');
     }
@@ -357,8 +358,9 @@ class AdlocaitePlayer {
     this.currentMediaFile = mediaFile;
     this.duration = vastData.creative?.duration || 0;
 
-    // Fire impression tracking
-    await this.fireTrackingEvent('impression');
+    // Fire impression tracking NON-BLOCKING (fire and forget)
+    // CRITICAL: No await! Tracking must not delay video playback
+    this.fireTrackingEvent('impression');
 
     // Play based on media type
     if (this.vastParser.isVideo(mediaFile)) {

@@ -28,9 +28,11 @@ node_modules/
 # Temporary files
 .tmp/
 temp/
+tmp/
 
 # Claude Code
 .claude/
+.mcp.json
 
 # Old test files
 test-*.html

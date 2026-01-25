@@ -546,3 +546,100 @@ Asset caching still works perfectly through standard browser mechanisms:
 - Videos/images are automatically cached by Chromium
 - Cache persists across page reloads (between ad displays)
 - No special configuration needed
+
+### 2026-01-22 - Screen ID Fallback Chain
+
+**Root Cause:** AWK reported "No screen ID available from BroadSignObject" error. Investigation revealed that `BroadSignObject.frame_id` requires explicit configuration in Broadsign Control Player ("Append Frame Id" option in Products → HTML settings). Without this configuration, `frame_id` is empty/undefined.
+
+**Impact:**
+- Code only checked `frame_id`, no fallbacks
+- `frame_id` empty → getScreenId() returned null
+- Application set skip signal → no playback
+
+**Broadsign ID Hierarchy:**
+```
+Display Unit (physical screen - display_unit_id)
+  └── Player (hardware - player_id)
+      └── Frame (content area - frame_id, requires config)
+```
+
+**Solution:** Implement fallback chain using always-available properties.
+
+**Fixes Applied:**
+
+17. **Screen ID Fallback Chain** (broadsign-adapter.js:99-161)
+    - Changed from single `frame_id` check to fallback chain
+    - Priority: `frame_id` → `display_unit_id` → `player_id`
+    - All fallbacks log which ID was used for debugging
+    - Works without "Append Frame Id" configuration
+
+**Code Change:**
+```javascript
+// BEFORE (only frame_id, no fallback):
+this.screenId = bsObject.frame_id;
+if (!this.screenId || this.screenId === '') {
+  this.error('BroadSignObject.frame_id is empty or undefined');
+  // Falls through to URL/localStorage, likely returns null
+}
+
+// AFTER (fallback chain):
+// 1. Try frame_id (best for multi-frame setups)
+if (bsObject.frame_id && bsObject.frame_id !== '') {
+  this.screenId = bsObject.frame_id;
+  return this.screenId;
+}
+
+// 2. Fallback: display_unit_id (physical screen - always available)
+if (bsObject.display_unit_id && bsObject.display_unit_id !== '') {
+  this.screenId = bsObject.display_unit_id;
+  this.log('Using display_unit_id (frame_id not available)');
+  return this.screenId;
+}
+
+// 3. Last resort: player_id (hardware - always available)
+if (bsObject.player_id && bsObject.player_id !== '') {
+  this.screenId = bsObject.player_id;
+  this.log('Using player_id as fallback');
+  return this.screenId;
+}
+```
+
+**Why This Works:**
+- `display_unit_id` and `player_id` are always available (no config required)
+- For single-frame setups (1 frame = whole screen), `display_unit_id` is ideal
+- For multi-frame setups with "Append Frame Id" enabled, `frame_id` is still preferred
+- Backend external_id mapping works with any of these IDs
+
+**Configuration Notes:**
+- **Optional:** Enable "Append Frame Id" in Broadsign (Products → HTML) for frame-level tracking
+- **Backend:** Set Adlocaite screen `external_id` to match the ID used (check debug logs)
+- **Recommended Player Version:** 15.8.x+ (fixes frame_id issues in multi-frame setups)
+
+18. **Skip Signal Timing Fix** (index.html:187-191)
+    - Fixed race condition where skip signal was set too late
+    - Now sets skip immediately when no screen ID available
+    - Previously: Skip set in `start()` (BroadSignPlay) - after Broadsign skip check
+    - Now: Skip set in `_performInitialization()` - before Broadsign skip check (T+1s, T+2s)
+    - Prevents black screen when screen ID not available
+
+**The Timing Bug:**
+```
+BEFORE (Bug - Black Screen):
+T+0.0s: Page Load → getScreenId() → null
+        → Only warning logged, no skip signal
+        → Title stays "wait"
+T+1.0s: Broadsign Skip Check #1 → "wait" → "still loading"
+T+2.0s: Broadsign Skip Check #2 → "wait" → "still loading"
+        → Broadsign displays slot!
+T+3.0s: BroadSignPlay() → setPlaybackStatus('skip') → TOO LATE!
+        → User sees: BLACK SCREEN
+
+AFTER (Fixed - Proper Skip):
+T+0.0s: Page Load → getScreenId() → null
+        → setPlaybackStatus('skip', 'no screen id') IMMEDIATELY!
+        → Title becomes "skip:no screen id"
+T+1.0s: Broadsign Skip Check #1 → "skip" → Skip to next!
+        → Fallback bundle or next waterfall item displays ✓
+```
+
+**Critical:** Broadsign only checks skip signal at T+1s and T+2s after page load. Setting skip signal after this window causes black screen instead of proper fallback.

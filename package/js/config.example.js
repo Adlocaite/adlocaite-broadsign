@@ -45,6 +45,20 @@ const ADLOCAITE_CONFIG = {
   debugMode: false,
 
   /**
+   * Error Tracking (Sentry)
+   * When enabled, sends errors and exceptions to Sentry for monitoring
+   * Helps identify issues in production without affecting performance
+   * Recommended: true for production, false for local development
+   */
+  enableErrorTracking: true,
+
+  /**
+   * Package version (for Sentry release tracking)
+   * Automatically set by build process, or leave as 'unknown'
+   */
+  packageVersion: 'unknown',
+
+  /**
    * Request timeout in milliseconds
    * How long to wait for API responses before giving up
    */
