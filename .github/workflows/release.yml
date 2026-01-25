@@ -100,11 +100,13 @@ jobs:
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "New version: $NEW_VERSION"
 
-          # Update package.json (line 3)
-          sed -i "3s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" package.json
+          # Update package.json - use pattern-based replacement (not line numbers)
+          # Note: sed -i syntax is Linux-specific (GitHub Actions uses Ubuntu)
+          # For local macOS testing, use: sed -i '' "..." file
+          sed -i 's/"version": "[^"]*"/"version": "'"$NEW_VERSION"'"/' package.json
 
-          # Update config.example.js (line 59)
-          sed -i "59s/packageVersion: '.*'/packageVersion: '$NEW_VERSION'/" package/js/config.example.js
+          # Update config.example.js - use pattern-based replacement (not line numbers)
+          sed -i "s/packageVersion: '[^']*'/packageVersion: '$NEW_VERSION'/" package/js/config.example.js
 
           # Configure git
           git config user.name "github-actions[bot]"
@@ -143,6 +145,15 @@ jobs:
       - name: Pull latest changes
         run: |
           git pull origin main
+
+      - name: Prepare build environment
+        run: |
+          # Create config.js from example for CI builds
+          # build.sh requires config.js to exist, even though the package won't be used without a real API key
+          cp package/js/config.example.js package/js/config.js
+          # Set placeholder API key for CI (users will configure their own key before use)
+          sed -i "s/apiKey: 'pub_xxxx'/apiKey: 'pub_CI_BUILD'/" package/js/config.js
+          echo "config.js created for CI build"
 
       - name: Build package
         run: |
@@ -333,6 +344,15 @@ jobs:
           git push origin "$NEW_TAG"
 
           echo "Created and pushed tag: $NEW_TAG"
+
+      - name: Prepare build environment
+        run: |
+          # Create config.js from example for CI builds
+          # build.sh requires config.js to exist, even though the package won't be used without a real API key
+          cp package/js/config.example.js package/js/config.js
+          # Set placeholder API key for CI (users will configure their own key before use)
+          sed -i "s/apiKey: 'pub_xxxx'/apiKey: 'pub_CI_BUILD'/" package/js/config.js
+          echo "config.js created for CI build"
 
       - name: Build package
         run: |
