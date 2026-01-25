@@ -18,7 +18,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     outputs:
       new_version: ${{ steps.bump.outputs.new_version }}
-      version_bumped: ${{ steps.bump.outputs.version_bumped }}
+      version_bumped: ${{ steps.bump.outputs.version_bumped || steps.skip.outputs.version_bumped }}
 
     steps:
       - name: Checkout code
@@ -120,6 +120,7 @@ jobs:
           echo "version_bumped=true" >> $GITHUB_OUTPUT
 
       - name: Skip version bump
+        id: skip
         if: steps.pr-labels.outputs.has_version_label != 'true'
         run: |
           echo "Skipping version bump - no version label found"
