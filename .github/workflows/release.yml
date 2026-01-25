@@ -1,0 +1,366 @@
+name: Release Automation
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # Job 1: Version bump on main branch (PR merge with version label)
+  version-bump:
+    name: Bump Version
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
+      version_bumped: ${{ steps.bump.outputs.version_bumped }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get PR labels
+        id: pr-labels
+        run: |
+          # Get the commit SHA that triggered this workflow
+          COMMIT_SHA="${{ github.sha }}"
+
+          # Find PR associated with this commit
+          PR_NUMBER=$(gh pr list --state merged --search "$COMMIT_SHA" --json number --jq '.[0].number')
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No merged PR found for commit $COMMIT_SHA"
+            echo "has_version_label=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Found PR #$PR_NUMBER"
+
+          # Get PR labels
+          LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name')
+          echo "PR labels: $LABELS"
+
+          # Check for version labels
+          VERSION_LABEL=""
+          if echo "$LABELS" | grep -q "version:major"; then
+            VERSION_LABEL="major"
+          elif echo "$LABELS" | grep -q "version:minor"; then
+            VERSION_LABEL="minor"
+          elif echo "$LABELS" | grep -q "version:patch"; then
+            VERSION_LABEL="patch"
+          fi
+
+          if [ -z "$VERSION_LABEL" ]; then
+            echo "No version label found, skipping version bump"
+            echo "has_version_label=false" >> $GITHUB_OUTPUT
+          else
+            echo "Version label: $VERSION_LABEL"
+            echo "has_version_label=true" >> $GITHUB_OUTPUT
+            echo "version_label=$VERSION_LABEL" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump version
+        id: bump
+        if: steps.pr-labels.outputs.has_version_label == 'true'
+        run: |
+          # Read current version from package.json
+          CURRENT_VERSION=$(grep -o '"version": "[^"]*"' package.json | cut -d'"' -f4)
+          echo "Current version: $CURRENT_VERSION"
+
+          # Parse version components
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+          # Calculate new version based on label
+          VERSION_LABEL="${{ steps.pr-labels.outputs.version_label }}"
+          case "$VERSION_LABEL" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "New version: $NEW_VERSION"
+
+          # Update package.json (line 3)
+          sed -i "3s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" package.json
+
+          # Update config.example.js (line 59)
+          sed -i "59s/packageVersion: '.*'/packageVersion: '$NEW_VERSION'/" package/js/config.example.js
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Commit and push
+          git add package.json package/js/config.example.js
+          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+          git push
+
+          # Set outputs
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version_bumped=true" >> $GITHUB_OUTPUT
+
+      - name: Skip version bump
+        if: steps.pr-labels.outputs.has_version_label != 'true'
+        run: |
+          echo "Skipping version bump - no version label found"
+          echo "version_bumped=false" >> $GITHUB_OUTPUT
+
+  # Job 2: Create GitHub Release (depends on version-bump)
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: version-bump
+    if: needs.version-bump.outputs.version_bumped == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Pull latest changes
+        run: |
+          git pull origin main
+
+      - name: Build package
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+          # Verify package was created
+          if [ ! -f "adlocaite-broadsign.x-html-package" ]; then
+            echo "ERROR: Package build failed"
+            exit 1
+          fi
+
+          echo "Package built successfully"
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(grep -o '"version": "[^"]*"' package.json | cut -d'"' -f4)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Rename artifact
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mv adlocaite-broadsign.x-html-package "adlocaite-broadsign-v${VERSION}.x-html-package"
+          echo "Artifact renamed to: adlocaite-broadsign-v${VERSION}.x-html-package"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
+          body: |
+            ## Adlocaite Broadsign Integration v${{ steps.version.outputs.version }}
+
+            ### Installation
+
+            1. Download `adlocaite-broadsign-v${{ steps.version.outputs.version }}.x-html-package`
+            2. Upload to Broadsign Control as HTML5 content
+            3. Configure your API key in `package/js/config.js`
+
+            ### Documentation
+
+            See [README.md](https://github.com/adlocaite/adlocaite-broadsign/blob/main/README.md) for full documentation.
+
+            ---
+
+            **Full Changelog**: https://github.com/adlocaite/adlocaite-broadsign/compare/v${{ steps.version.outputs.version }}...HEAD
+          files: |
+            adlocaite-broadsign-v${{ steps.version.outputs.version }}.x-html-package
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 3: Sync version to dev branch (depends on create-release)
+  sync-to-dev:
+    name: Sync to Dev
+    runs-on: ubuntu-latest
+    needs: [version-bump, create-release]
+    if: needs.version-bump.outputs.version_bumped == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Get version
+        id: version
+        run: |
+          git fetch origin main
+          git checkout main
+          VERSION=$(grep -o '"version": "[^"]*"' package.json | cut -d'"' -f4)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version to sync: $VERSION"
+          git checkout dev
+
+      - name: Create sync branch
+        id: sync-branch
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BRANCH_NAME="sync-version-${VERSION}"
+
+          # Create branch from dev
+          git checkout -b "$BRANCH_NAME"
+
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Cherry-pick version bump commit
+        run: |
+          # Find the version bump commit on main
+          git fetch origin main
+          COMMIT_SHA=$(git log origin/main --grep="chore: bump version to ${{ steps.version.outputs.version }}" --format="%H" -n 1)
+
+          if [ -z "$COMMIT_SHA" ]; then
+            echo "ERROR: Version bump commit not found"
+            exit 1
+          fi
+
+          echo "Cherry-picking commit: $COMMIT_SHA"
+          git cherry-pick "$COMMIT_SHA"
+
+      - name: Push sync branch
+        run: |
+          BRANCH_NAME="${{ steps.sync-branch.outputs.branch_name }}"
+          git push origin "$BRANCH_NAME"
+
+      - name: Create PR to dev
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BRANCH_NAME="${{ steps.sync-branch.outputs.branch_name }}"
+
+          gh pr create \
+            --base dev \
+            --head "$BRANCH_NAME" \
+            --title "chore: sync version to $VERSION from main" \
+            --body "Syncs version bump to \`$VERSION\` from main branch.
+
+          This PR updates:
+          - \`package.json\` version field
+          - \`package/js/config.example.js\` packageVersion field
+
+          **Note:** This PR is automatically generated by the release workflow. Review and merge manually." \
+            --label "version-sync"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 4: Dev pre-release (dev branch only)
+  dev-prerelease:
+    name: Dev Pre-release
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from package.json
+        id: version
+        run: |
+          VERSION=$(grep -o '"version": "[^"]*"' package.json | cut -d'"' -f4)
+          echo "base_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Base version: $VERSION"
+
+      - name: Find highest dev tag
+        id: dev-tag
+        run: |
+          BASE_VERSION="${{ steps.version.outputs.base_version }}"
+
+          # Get all tags matching vX.Y.Z-dev.N pattern for this version
+          DEV_TAGS=$(git tag -l "v${BASE_VERSION}-dev.*" | sort -V)
+
+          if [ -z "$DEV_TAGS" ]; then
+            echo "No existing dev tags found for v${BASE_VERSION}"
+            NEXT_N=1
+          else
+            # Get the highest N value
+            HIGHEST_TAG=$(echo "$DEV_TAGS" | tail -n 1)
+            echo "Highest dev tag: $HIGHEST_TAG"
+
+            # Extract N from vX.Y.Z-dev.N
+            CURRENT_N=$(echo "$HIGHEST_TAG" | sed -n 's/.*-dev\.\([0-9]*\)$/\1/p')
+            NEXT_N=$((CURRENT_N + 1))
+          fi
+
+          NEW_TAG="v${BASE_VERSION}-dev.${NEXT_N}"
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "New dev tag: $NEW_TAG"
+
+      - name: Create dev tag
+        run: |
+          NEW_TAG="${{ steps.dev-tag.outputs.new_tag }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$NEW_TAG" -m "Dev pre-release $NEW_TAG"
+          git push origin "$NEW_TAG"
+
+          echo "Created and pushed tag: $NEW_TAG"
+
+      - name: Build package
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+          # Verify package was created
+          if [ ! -f "adlocaite-broadsign.x-html-package" ]; then
+            echo "ERROR: Package build failed"
+            exit 1
+          fi
+
+          echo "Package built successfully"
+
+      - name: Rename artifact
+        id: artifact
+        run: |
+          NEW_TAG="${{ steps.dev-tag.outputs.new_tag }}"
+          ARTIFACT_NAME="adlocaite-broadsign-${NEW_TAG}.x-html-package"
+
+          mv adlocaite-broadsign.x-html-package "$ARTIFACT_NAME"
+
+          echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+          echo "Artifact renamed to: $ARTIFACT_NAME"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.artifact_name }}
+          path: ${{ steps.artifact.outputs.artifact_name }}
+          retention-days: 30
+          if-no-files-found: error
