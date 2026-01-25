@@ -30,6 +30,20 @@ if exist "adlocaite-broadsign.x-html-package" (
   del /F /Q "adlocaite-broadsign.x-html-package"
 )
 
+REM Version injection
+echo Injecting version into config.js...
+for /f "tokens=2 delims=:," %%a in ('findstr "version" package.json') do set VERSION=%%a
+set VERSION=%VERSION:"=%
+set VERSION=%VERSION: =%
+
+findstr /C:"packageVersion:" "package\js\config.js" >nul
+if %errorlevel% equ 0 (
+  powershell -Command "(gc package\js\config.js) -replace 'packageVersion: ''[^'']*''', 'packageVersion: ''%VERSION%''' | Set-Content package\js\config.js"
+  echo   Version %VERSION% injected
+) else (
+  echo   WARNING: packageVersion not found in config.js
+)
+
 REM Check if 7-Zip is available
 where 7z >nul 2>nul
 if %errorlevel% neq 0 (

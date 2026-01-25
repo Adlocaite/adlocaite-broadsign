@@ -38,6 +38,18 @@ if [ -f "adlocaite-broadsign.x-html-package" ]; then
   rm -f adlocaite-broadsign.x-html-package
 fi
 
+# Version injection
+echo "📝 Injecting version into config.js..."
+VERSION=$(grep '"version"' package.json | sed -E 's/.*"version": "([^"]+)".*/\1/')
+
+if grep -q "packageVersion:" "package/js/config.js"; then
+  sed -i.bak "s/packageVersion: '[^']*'/packageVersion: '$VERSION'/" package/js/config.js
+  rm -f package/js/config.js.bak
+  echo "  ✅ Version $VERSION injected"
+else
+  echo "  ⚠️  Warning: packageVersion not found in config.js"
+fi
+
 # Create package
 echo "📦 Creating package..."
 cd package
