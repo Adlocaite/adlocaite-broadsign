@@ -38,9 +38,21 @@ if [ -f "adlocaite-broadsign.x-html-package" ]; then
   rm -f adlocaite-broadsign.x-html-package
 fi
 
+# Check if package.json exists
+if [ ! -f "package.json" ]; then
+  echo -e "${RED}❌ Error: package.json not found${NC}"
+  exit 1
+fi
+
 # Version injection
 echo "📝 Injecting version into config.js..."
 VERSION=$(grep '"version"' package.json | sed -E 's/.*"version": "([^"]+)".*/\1/')
+
+# Validate version extraction
+if [ -z "$VERSION" ]; then
+  echo -e "${RED}❌ Error: Failed to extract version from package.json${NC}"
+  exit 1
+fi
 
 if grep -q "packageVersion:" "package/js/config.js"; then
   sed -i.bak "s/packageVersion: '[^']*'/packageVersion: '$VERSION'/" package/js/config.js

@@ -30,11 +30,23 @@ if exist "adlocaite-broadsign.x-html-package" (
   del /F /Q "adlocaite-broadsign.x-html-package"
 )
 
+REM Check if package.json exists
+if not exist "package.json" (
+  echo ERROR: package.json not found
+  exit /b 1
+)
+
 REM Version injection
 echo Injecting version into config.js...
-for /f "tokens=2 delims=:," %%a in ('findstr "version" package.json') do set VERSION=%%a
+for /f "tokens=2 delims=:," %%a in ('findstr /C:"\"version\"" package.json') do set VERSION=%%a
 set VERSION=%VERSION:"=%
 set VERSION=%VERSION: =%
+
+REM Validate version extraction
+if "%VERSION%"=="" (
+  echo ERROR: Failed to extract version from package.json
+  exit /b 1
+)
 
 findstr /C:"packageVersion:" "package\js\config.js" >nul
 if %errorlevel% equ 0 (
