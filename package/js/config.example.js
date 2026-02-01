@@ -39,10 +39,11 @@ const ADLOCAITE_CONFIG = {
 
   /**
    * Debug mode
-   * When enabled, logs detailed information to console
+   * When enabled, logs detailed information to console and shows debug panel
+   * RECOMMENDED: Enable for testing to see BroadSignObject diagnostics
    * Disable in production for better performance
    */
-  debugMode: false,
+  debugMode: true,
 
   /**
    * Error Tracking (Sentry)

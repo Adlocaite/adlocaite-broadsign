@@ -168,7 +168,7 @@
 
           // Initialize components
           this.apiClient = new AdlocaiteAPIClient(this.config);
-          this.broadsignAdapter = new BroadsignAdapter(this.config);
+          this.broadsignAdapter = new BroadsignAdapter(this.config, this.errorTracking);
           this.vastParser = new VASTParser(this.config);
           this.player = new AdlocaitePlayer(
             this.config,
@@ -186,6 +186,15 @@
 
           this.initialized = true;
           console.log('[Adlocaite] Application initialized successfully');
+
+          // DIAGNOSTICS: Create initial BroadSignObject snapshot at DOMContentLoaded
+          // This tells us exactly what state BroadSignObject is in when we first try to access it
+          const initialSnapshot = this.broadsignAdapter.createBroadSignObjectSnapshot();
+          this.errorTracking.addBreadcrumb('diagnostics', 'BroadSignObject snapshot at DOMContentLoaded', {
+            lifecycle_phase: 'DOMContentLoaded',
+            snapshot: initialSnapshot,
+          });
+          console.log('[Adlocaite] BroadSignObject snapshot at DOMContentLoaded:', initialSnapshot);
 
           // Start pre-loading content immediately (don't wait - runs in background)
           // This happens during Broadsign's off-screen pre-buffering phase
@@ -348,6 +357,16 @@
           // This can happen in test environments where BroadSignObject is injected late
           if (!this.preloadPromise && !this.preloadedContent) {
             console.log('[Adlocaite] Pre-loading not started yet, attempting now...');
+
+            // DIAGNOSTICS: Create BroadSignObject snapshot at BroadSignPlay()
+            // Compare with DOMContentLoaded snapshot to see if BroadSignObject became available later
+            const broadSignPlaySnapshot = this.broadsignAdapter.createBroadSignObjectSnapshot();
+            this.errorTracking.addBreadcrumb('diagnostics', 'BroadSignObject snapshot at BroadSignPlay()', {
+              lifecycle_phase: 'BroadSignPlay',
+              snapshot: broadSignPlaySnapshot,
+            });
+            console.log('[Adlocaite] BroadSignObject snapshot at BroadSignPlay():', broadSignPlaySnapshot);
+
             this.screenId = this.broadsignAdapter.getScreenId();
             if (this.screenId) {
               this.preloadPromise = this.preloadContent();
