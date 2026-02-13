@@ -31,6 +31,20 @@ const ADLOCAITE_CONFIG = {
   minBidCents: 100,
 
   /**
+   * Enable asset pre-caching
+   * When enabled, the player will periodically fetch cacheable assets
+   * and store them in browser cache for offline playback
+   */
+  enableCaching: true,
+
+  /**
+   * Caching interval in milliseconds
+   * How often to refresh the cache with new assets
+   * Default: 300000 (5 minutes)
+   */
+  cachingInterval: 300000,
+
+  /**
    * VAST mode
    * When true, requests will include vast=true parameter to receive VAST XML
    * VAST provides automatic tracking and better player compatibility
@@ -39,25 +53,10 @@ const ADLOCAITE_CONFIG = {
 
   /**
    * Debug mode
-   * When enabled, logs detailed information to console and shows debug panel
-   * RECOMMENDED: Enable for testing to see BroadSignObject diagnostics
+   * When enabled, logs detailed information to console
    * Disable in production for better performance
    */
-  debugMode: true,
-
-  /**
-   * Error Tracking (Sentry)
-   * When enabled, sends errors and exceptions to Sentry for monitoring
-   * Helps identify issues in production without affecting performance
-   * Recommended: true for production, false for local development
-   */
-  enableErrorTracking: true,
-
-  /**
-   * Package version (for Sentry release tracking)
-   * Automatically set by build process, or leave as 'unknown'
-   */
-  packageVersion: 'unknown',
+  debugMode: false,
 
   /**
    * Request timeout in milliseconds
@@ -68,9 +67,8 @@ const ADLOCAITE_CONFIG = {
   /**
    * Asset loading timeout in milliseconds
    * How long to wait for media assets to load
-   * Reduced to 5s to fit within Broadsign's "several seconds" pre-buffer window
    */
-  assetTimeout: 5000,
+  assetTimeout: 20000,
 
   /**
    * Maximum lifecycle duration in milliseconds

@@ -11,8 +11,10 @@
 <body>
   <!-- Main player container -->
   <div id="adlocaite-container" class="adlocaite-container">
-    <!-- No loading screen - content will appear when ready -->
-    <!-- Black background by default (see styles.css) -->
+    <div class="loading-screen">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Loading Adlocaite...</div>
+    </div>
   </div>
 
   <!-- Debug panel (only visible in debug mode) -->
@@ -24,15 +26,12 @@
   <!-- Configuration -->
   <script src="js/config.js"></script>
 
-  <!-- Vendor libraries (bundled) -->
-  <script src="js/vendor/sentry.min.js"></script>
-
   <!-- Core modules -->
-  <script src="js/error-tracking.js"></script>
   <script src="js/adlocaite-api.js"></script>
   <script src="js/broadsign-adapter.js"></script>
   <script src="js/vast-parser.js"></script>
   <script src="js/player.js"></script>
+  <script src="js/cache-manager.js"></script>
 
   <!-- Main application -->
   <script>
@@ -47,7 +46,7 @@
         this.broadsignAdapter = null;
         this.vastParser = null;
         this.player = null;
-        this.errorTracking = null;
+        this.cacheManager = null;
         this.initialized = false;
         this.initializing = false;
         this.initPromise = null;
@@ -129,11 +128,6 @@
             // Cross-origin access denied - ignore
           }
 
-          // Initialize error tracking (loads Sentry SDK asynchronously)
-          this.errorTracking = new ErrorTracking(this.config);
-          console.log('[Adlocaite] Error tracking initialized');
-          this.errorTracking.addBreadcrumb('lifecycle', 'Application initialization started');
-
           // Enable debug panel if needed
           if (this.config.debugMode) {
             document.getElementById('debug-panel').style.display = 'block';
@@ -166,9 +160,13 @@
             throw new Error('Invalid maxRetries in config. Must be a non-negative number.');
           }
 
+          if (typeof this.config.cachingInterval !== 'number' || this.config.cachingInterval <= 0) {
+            throw new Error('Invalid cachingInterval in config. Must be a positive number.');
+          }
+
           // Initialize components
           this.apiClient = new AdlocaiteAPIClient(this.config);
-          this.broadsignAdapter = new BroadsignAdapter(this.config, this.errorTracking);
+          this.broadsignAdapter = new BroadsignAdapter(this.config);
           this.vastParser = new VASTParser(this.config);
           this.player = new AdlocaitePlayer(
             this.config,
@@ -176,6 +174,7 @@
             this.broadsignAdapter,
             this.vastParser
           );
+          this.cacheManager = new CacheManager(this.config, this.apiClient);
 
           // Initialize Broadsign adapter
           const playerInfo = this.broadsignAdapter.initialize();
@@ -187,41 +186,18 @@
           this.initialized = true;
           console.log('[Adlocaite] Application initialized successfully');
 
-          // DIAGNOSTICS: Create initial BroadSignObject snapshot at DOMContentLoaded
-          // This tells us exactly what state BroadSignObject is in when we first try to access it
-          const initialSnapshot = this.broadsignAdapter.createBroadSignObjectSnapshot();
-          this.errorTracking.addBreadcrumb('diagnostics', 'BroadSignObject snapshot at DOMContentLoaded', {
-            lifecycle_phase: 'DOMContentLoaded',
-            snapshot: initialSnapshot,
-          });
-          console.log('[Adlocaite] BroadSignObject snapshot at DOMContentLoaded:', initialSnapshot);
-
           // Start pre-loading content immediately (don't wait - runs in background)
           // This happens during Broadsign's off-screen pre-buffering phase
           this.screenId = this.broadsignAdapter.getScreenId();
           if (this.screenId) {
             console.log('[Adlocaite] Starting pre-load for screen:', this.screenId);
-            this.errorTracking.addBreadcrumb('lifecycle', 'Screen ID found', { screen_id: this.screenId });
             this.preloadPromise = this.preloadContent();
           } else {
-            console.warn('[Adlocaite] No screen ID available - signaling skip to Broadsign');
-            this.errorTracking.addBreadcrumb('lifecycle', 'No screen ID available - skip signal set');
-            // CRITICAL: Set skip signal immediately! Broadsign checks at T+1s and T+2s.
-            // If we wait until BroadSignPlay(), the skip check is already done → black screen!
-            this.setPlaybackStatus('skip', 'no screen id');
+            console.warn('[Adlocaite] No screen ID - pre-loading skipped');
           }
 
         } catch (err) {
           console.error('[Adlocaite] Initialization failed:', err);
-
-          // Send error to Sentry (if tracking enabled)
-          if (this.errorTracking) {
-            this.errorTracking.captureError(err, {
-              step: 'initialization',
-              config_loaded: !!this.config,
-            });
-          }
-
           this.setPlaybackStatus('skip', 'init failed');
           throw err;
         }
@@ -239,12 +215,15 @@
 
         this.isPreloading = true;
         console.log('[Adlocaite] Pre-loading content...');
-        this.errorTracking.addBreadcrumb('preload', 'Pre-loading started', { screen_id: this.screenId });
 
         try {
+          // Start cache manager for background asset caching
+          if (this.config.enableCaching) {
+            this.cacheManager.start(this.screenId);
+          }
+
           // Request offer from API
           console.log('[Adlocaite] Pre-load: Requesting offer...');
-          this.errorTracking.addBreadcrumb('api', 'Requesting offer', { screen_id: this.screenId });
           const offerResponse = await this.apiClient.requestOfferByExternalId(this.screenId, {
             vast: this.config.vastMode,
             minBidCents: this.config.minBidCents
@@ -314,24 +293,11 @@
 
           // Signal to Broadsign that content is ready
           this.setPlaybackStatus('ready');
-          this.errorTracking.addBreadcrumb('preload', 'Pre-load complete - ready for playback', {
-            deal_id: dealId,
-            media_url: mediaFile.url
-          });
           console.log('[Adlocaite] Pre-load complete. Ready for instant playback.');
           return this.preloadedContent;
 
         } catch (err) {
           console.error('[Adlocaite] Pre-load failed:', err);
-
-          // Send error to Sentry
-          if (this.errorTracking) {
-            this.errorTracking.captureError(err, {
-              step: 'preload',
-              screen_id: this.screenId,
-            });
-          }
-
           this.preloadedContent = { error: true, message: err.message };
           this.setPlaybackStatus('skip', 'preload failed');
           return this.preloadedContent;
@@ -357,16 +323,6 @@
           // This can happen in test environments where BroadSignObject is injected late
           if (!this.preloadPromise && !this.preloadedContent) {
             console.log('[Adlocaite] Pre-loading not started yet, attempting now...');
-
-            // DIAGNOSTICS: Create BroadSignObject snapshot at BroadSignPlay()
-            // Compare with DOMContentLoaded snapshot to see if BroadSignObject became available later
-            const broadSignPlaySnapshot = this.broadsignAdapter.createBroadSignObjectSnapshot();
-            this.errorTracking.addBreadcrumb('diagnostics', 'BroadSignObject snapshot at BroadSignPlay()', {
-              lifecycle_phase: 'BroadSignPlay',
-              snapshot: broadSignPlaySnapshot,
-            });
-            console.log('[Adlocaite] BroadSignObject snapshot at BroadSignPlay():', broadSignPlaySnapshot);
-
             this.screenId = this.broadsignAdapter.getScreenId();
             if (this.screenId) {
               this.preloadPromise = this.preloadContent();
@@ -409,15 +365,6 @@
 
         } catch (err) {
           console.error('[Adlocaite] Playback failed:', err);
-
-          // Send error to Sentry
-          if (this.errorTracking) {
-            this.errorTracking.captureError(err, {
-              step: 'playback',
-              screen_id: this.screenId,
-              preload_status: this.preloadedContent ? 'loaded' : 'not_loaded',
-            });
-          }
 
           // Ensure skip signal is set (may already be set from preload)
           // This signals Broadsign to move to next item in waterfall
@@ -465,9 +412,8 @@
       }
     }
 
-    // Create global app instance (global for ErrorTracking access)
+    // Create global app instance
     const app = new AdlocaiteApp();
-    window.app = app;
 
     // Initialize on page load (non-blocking)
     window.addEventListener('DOMContentLoaded', async () => {
@@ -477,7 +423,6 @@
         await app.initialize();
       } catch (err) {
         console.error('[Adlocaite] Failed to initialize:', err);
-        // Error already sent to Sentry in _performInitialization
       }
     });
 
@@ -504,15 +449,6 @@
         await app.start();
       } catch (err) {
         console.error('[Adlocaite] Start failed:', err);
-
-        // Send error to Sentry
-        if (app.errorTracking) {
-          app.errorTracking.captureError(err, {
-            step: 'broadsign_ready',
-            initialized: app.initialized,
-          });
-        }
-
         app.setPlaybackStatus('skip', err.message || 'start failed');
       }
     };
@@ -538,15 +474,6 @@
         await app.start();
       } catch (err) {
         console.error('[Adlocaite] Start failed:', err);
-
-        // Send error to Sentry
-        if (app.errorTracking) {
-          app.errorTracking.captureError(err, {
-            step: 'broadsign_ready_event',
-            initialized: app.initialized,
-          });
-        }
-
         app.setPlaybackStatus('skip', err.message || 'start failed');
       }
     });

@@ -94,9 +94,8 @@ class AdlocaitePlayer {
   }
 
   /**
-   * Pre-load video with loadedmetadata event
-   * Faster than canplaythrough - starts playback as soon as metadata is loaded
-   * Video will continue buffering during playback if needed
+   * Pre-load video with proper buffering
+   * Uses canplaythrough event to ensure enough is buffered
    */
   async preloadVideo(mediaFile) {
     this.log('Pre-loading video:', mediaFile.url);
@@ -132,17 +131,16 @@ class AdlocaitePlayer {
       // Cleanup function to remove all listeners
       const cleanup = () => {
         clearTimeout(loadTimeout);
-        this.preloadedVideoElement.removeEventListener('loadedmetadata', onLoadedMetadata);
+        this.preloadedVideoElement.removeEventListener('canplaythrough', onCanPlayThrough);
         this.preloadedVideoElement.removeEventListener('error', onError);
       };
 
-      // Use loadedmetadata instead of canplaythrough for faster pre-loading
-      // This allows instant playback start while video continues buffering
-      // Better for Broadsign's "several seconds" pre-buffer window
-      const onLoadedMetadata = () => {
+      // CRITICAL: Use canplaythrough instead of loadedmetadata
+      // canplaythrough = browser estimates it can play through without buffering
+      const onCanPlayThrough = () => {
         cleanup();
         this.duration = this.preloadedVideoElement.duration;
-        this.log(`Video pre-loaded. Duration: ${this.duration}s, metadata ready`);
+        this.log(`Video pre-loaded. Duration: ${this.duration}s, buffered and ready`);
         resolve();
       };
 
@@ -156,7 +154,7 @@ class AdlocaitePlayer {
         reject(new Error(`Video pre-load error: ${videoError?.message || 'unknown'}`));
       };
 
-      this.preloadedVideoElement.addEventListener('loadedmetadata', onLoadedMetadata);
+      this.preloadedVideoElement.addEventListener('canplaythrough', onCanPlayThrough);
       this.preloadedVideoElement.addEventListener('error', onError);
 
       // Start loading
@@ -230,9 +228,8 @@ class AdlocaitePlayer {
     this.currentMediaFile = this.preloadedMediaFile;
     this.duration = vastData.creative?.duration || this.duration || 0;
 
-    // Fire impression tracking NON-BLOCKING (fire and forget)
-    // CRITICAL: No await! Tracking must not delay video playback
-    this.fireTrackingEvent('impression');
+    // Fire impression tracking
+    await this.fireTrackingEvent('impression');
 
     // Play based on media type
     if (this.vastParser.isVideo(this.preloadedMediaFile)) {
@@ -347,10 +344,10 @@ class AdlocaitePlayer {
    */
   async playFromVAST(vastData, dealId) {
     this.log('Playing from VAST data');
-
+    
     this.currentDealId = dealId;
     const mediaFile = this.vastParser.getBestMediaFile();
-
+    
     if (!mediaFile) {
       throw new Error('No suitable media file found in VAST');
     }
@@ -358,9 +355,8 @@ class AdlocaitePlayer {
     this.currentMediaFile = mediaFile;
     this.duration = vastData.creative?.duration || 0;
 
-    // Fire impression tracking NON-BLOCKING (fire and forget)
-    // CRITICAL: No await! Tracking must not delay video playback
-    this.fireTrackingEvent('impression');
+    // Fire impression tracking
+    await this.fireTrackingEvent('impression');
 
     // Play based on media type
     if (this.vastParser.isVideo(mediaFile)) {
