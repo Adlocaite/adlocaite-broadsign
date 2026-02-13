@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Broadsign Integration Test</title>
+  <link rel="icon" href="/test/favicon.ico" type="image/x-icon">
+  <style>
+    :root {
+      --brutalist-bg-primary: rgb(255, 255, 255);
+      --brutalist-bg-secondary: rgb(0, 0, 0);
+      --brutalist-bg-muted: rgba(0, 0, 0, 0.05);
+      --brutalist-text-primary: rgb(0, 0, 0);
+      --brutalist-text-secondary: rgb(255, 255, 255);
+      --brutalist-text-muted: rgba(0, 0, 0, 0.6);
+      --brutalist-text-disabled: rgba(0, 0, 0, 0.4);
+      --brutalist-border-primary: rgb(212, 212, 212);
+      --brutalist-error-bg: rgb(254, 242, 242);
+      --brutalist-error-text: rgb(127, 29, 29);
+      --brutalist-warning-bg: rgb(255, 247, 237);
+      --brutalist-warning-text: rgb(124, 45, 18);
+      --brutalist-success-bg: rgb(240, 253, 244);
+      --brutalist-success-text: rgb(20, 83, 45);
+      --brutalist-accent-text: rgb(22, 78, 99);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--brutalist-bg-primary);
+      color: var(--brutalist-text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--brutalist-bg-secondary);
+      color: var(--brutalist-text-secondary);
+      padding: 16px 24px;
+      border-bottom: 3px solid var(--brutalist-text-primary);
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 320px;
+      background: var(--brutalist-bg-muted);
+      border-right: 3px solid var(--brutalist-border-primary);
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .toolbar {
+      background: var(--brutalist-bg-muted);
+      padding: 16px 24px;
+      border-bottom: 3px solid var(--brutalist-border-primary);
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .content {
+      flex: 1;
+      position: relative;
+      background: #f5f5f5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .content-wrapper {
+      position: relative;
+      background: #fff;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .logs {
+      height: 240px;
+      background: var(--brutalist-bg-secondary);
+      color: var(--brutalist-text-secondary);
+      border-top: 3px solid var(--brutalist-text-primary);
+      overflow-y: auto;
+      padding: 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+
+    button {
+      background: var(--brutalist-bg-secondary);
+      color: var(--brutalist-text-secondary);
+      border: 3px solid var(--brutalist-text-primary);
+      padding: 10px 20px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      transition: all 0.1s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--brutalist-text-primary);
+      color: var(--brutalist-text-secondary);
+      transform: translate(-2px, -2px);
+      box-shadow: 4px 4px 0 var(--brutalist-text-primary);
+    }
+
+    button:active:not(:disabled) {
+      transform: translate(0, 0);
+      box-shadow: none;
+    }
+
+    button:disabled {
+      background: var(--brutalist-bg-muted);
+      color: var(--brutalist-text-disabled);
+      border-color: rgba(0, 0, 0, 0.2);
+      cursor: not-allowed;
+    }
+
+    button.danger {
+      background: #dc2626;
+      color: white;
+      border-color: #7f1d1d;
+    }
+
+    button.danger:hover:not(:disabled) {
+      background: #b91c1c;
+      box-shadow: 4px 4px 0 #7f1d1d;
+    }
+
+    .config-section {
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid var(--brutalist-border-primary);
+    }
+
+    .config-section:last-child { border-bottom: none; }
+
+    .config-section h3 {
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .config-field {
+      margin-bottom: 12px;
+    }
+
+    .config-field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--brutalist-text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .config-field input[type="text"],
+    .config-field input[type="password"],
+    .config-field input[type="number"] {
+      width: 100%;
+      background: var(--brutalist-bg-primary);
+      border: 2px solid var(--brutalist-border-primary);
+      color: var(--brutalist-text-primary);
+      padding: 8px 12px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .config-field input:focus {
+      outline: none;
+      border-color: var(--brutalist-text-primary);
+      box-shadow: 0 0 0 3px var(--brutalist-bg-muted);
+    }
+
+    .config-field input[type="checkbox"] {
+      margin-right: 8px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .config-field label.checkbox {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: none;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .log-entry {
+      padding: 4px 0;
+      border-left: 3px solid transparent;
+      padding-left: 12px;
+      margin: 2px 0;
+    }
+
+    .log-entry.info { border-left-color: var(--brutalist-accent-text); }
+    .log-entry.success { border-left-color: #16a34a; }
+    .log-entry.error { border-left-color: #dc2626; }
+    .log-entry.warning { border-left-color: #ea580c; }
+
+    .status {
+      display: inline-block;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border: 2px solid currentColor;
+    }
+
+    .status.ready {
+      background: var(--brutalist-success-bg);
+      color: var(--brutalist-success-text);
+    }
+
+    .status.running {
+      background: var(--brutalist-warning-bg);
+      color: var(--brutalist-warning-text);
+    }
+
+    .status.error {
+      background: var(--brutalist-error-bg);
+      color: var(--brutalist-error-text);
+    }
+
+    .placeholder {
+      padding: 40px;
+      text-align: center;
+      color: var(--brutalist-text-muted);
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🧪 Broadsign Integration Test</h1>
+  </header>
+
+  <div class="container">
+    <div class="sidebar">
+      <div class="config-section">
+        <h3>Configuration</h3>
+        <div class="config-field">
+          <label>frame_id:</label>
+          <input type="text" id="frameId" value="" placeholder="your-frame-id">
+        </div>
+        <div class="config-field">
+          <label>API Key:</label>
+          <input type="password" id="apiKey" value="" placeholder="pub_xxxx">
+        </div>
+        <div class="config-field">
+          <label>API Environment:</label>
+          <select id="apiEnvironment">
+            <option value="https://staging.api.adlocaite.com/functions/v1/api">Staging</option>
+            <option value="https://api.adlocaite.com/functions/v1/api">Production</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>Display</h3>
+        <div class="config-field">
+          <label>Resolution (width×height):</label>
+          <input type="text" id="resolution" value="1920x1080" placeholder="1920x1080">
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>Options</h3>
+        <div class="config-field">
+          <label class="checkbox">
+            <input type="checkbox" id="vastMode" checked>
+            VAST Mode
+          </label>
+        </div>
+        <div class="config-field">
+          <label class="checkbox">
+            <input type="checkbox" id="debugMode" checked>
+            Debug Mode
+          </label>
+        </div>
+        <div class="config-field">
+          <label>Min Bid (cents):</label>
+          <input type="number" id="minBid" value="1" min="0">
+        </div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="toolbar">
+        <button onclick="loadPackage()" id="loadBtn">▶ Load Package</button>
+        <button onclick="triggerPlay()" id="playBtn" disabled>🎬 Trigger Play</button>
+        <button onclick="clearLogs()" class="danger">🗑 Clear</button>
+        <span class="status ready" id="status">Ready</span>
+        <span class="status" id="titleStatus" style="margin-left: auto; background: #e5e7eb; color: #374151;">Title: —</span>
+      </div>
+
+      <div class="content" id="contentArea">
+        <div class="placeholder">
+          Click "Load Package" to begin
+        </div>
+      </div>
+
+      <div class="logs" id="logs"></div>
+    </div>
+  </div>
+
+  <script>
+    let packageWindow = null;
+    let titleMonitorInterval = null;
+    let lastTitle = null;
+
+    // ===== URL Parameter & LocalStorage Handling =====
+
+    const STORAGE_KEY = 'adlocaite_test_config';
+
+    /**
+     * Parse URL parameters
+     * Supports: ?api_key=xxx&frame_id=yyy&resolution=1920x1080&debug=true&env=staging
+     */
+    function getUrlParams() {
+      const params = new URLSearchParams(window.location.search);
+      return {
+        apiKey: params.get('api_key') || params.get('apiKey'),
+        frameId: params.get('frame_id') || params.get('frameId'),
+        resolution: params.get('resolution'),
+        vastMode: params.get('vast') || params.get('vastMode'),
+        debugMode: params.get('debug') || params.get('debugMode'),
+        minBid: params.get('min_bid') || params.get('minBid'),
+        environment: params.get('env') || params.get('environment')
+      };
+    }
+
+    /**
+     * Load config from localStorage
+     */
+    function loadFromStorage() {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : {};
+      } catch (e) {
+        console.error('Failed to load from localStorage:', e);
+        return {};
+      }
+    }
+
+    /**
+     * Save config to localStorage
+     */
+    function saveToStorage() {
+      try {
+        const config = {
+          apiKey: document.getElementById('apiKey').value,
+          frameId: document.getElementById('frameId').value,
+          resolution: document.getElementById('resolution').value,
+          vastMode: document.getElementById('vastMode').checked,
+          debugMode: document.getElementById('debugMode').checked,
+          minBid: document.getElementById('minBid').value,
+          apiEnvironment: document.getElementById('apiEnvironment').value
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      } catch (e) {
+        console.error('Failed to save to localStorage:', e);
+      }
+    }
+
+    /**
+     * Initialize form with values from URL params or localStorage
+     * Priority: URL params > localStorage > Defaults
+     */
+    function initializeForm() {
+      const urlParams = getUrlParams();
+      const stored = loadFromStorage();
+
+      // API Key
+      const apiKey = urlParams.apiKey || stored.apiKey || '';
+      if (apiKey) {
+        document.getElementById('apiKey').value = apiKey;
+        log('API Key loaded from ' + (urlParams.apiKey ? 'URL params' : 'localStorage'), 'info');
+      }
+
+      // Frame ID
+      const frameId = urlParams.frameId || stored.frameId || '';
+      if (frameId) {
+        document.getElementById('frameId').value = frameId;
+        log('Frame ID loaded: ' + frameId + ' (from ' + (urlParams.frameId ? 'URL params' : 'localStorage') + ')', 'info');
+      }
+
+      // Resolution
+      const resolution = urlParams.resolution || stored.resolution || '1920x1080';
+      document.getElementById('resolution').value = resolution;
+
+      // VAST Mode (convert string 'true'/'false' to boolean)
+      const vastMode = urlParams.vastMode !== null ? (urlParams.vastMode === 'true' || urlParams.vastMode === '1') :
+                      (stored.vastMode !== undefined ? stored.vastMode : true);
+      document.getElementById('vastMode').checked = vastMode;
+
+      // Debug Mode
+      const debugMode = urlParams.debugMode !== null ? (urlParams.debugMode === 'true' || urlParams.debugMode === '1') :
+                       (stored.debugMode !== undefined ? stored.debugMode : true);
+      document.getElementById('debugMode').checked = debugMode;
+
+      // Min Bid
+      const minBid = urlParams.minBid || stored.minBid || '1';
+      document.getElementById('minBid').value = minBid;
+
+      // API Environment
+      let apiEnvironment = stored.apiEnvironment || 'https://staging.api.adlocaite.com/functions/v1/api';
+      if (urlParams.environment === 'staging') {
+        apiEnvironment = 'https://staging.api.adlocaite.com/functions/v1/api';
+      } else if (urlParams.environment === 'production' || urlParams.environment === 'prod') {
+        apiEnvironment = 'https://api.adlocaite.com/functions/v1/api';
+      } else if (urlParams.environment && urlParams.environment.startsWith('http')) {
+        apiEnvironment = urlParams.environment;
+      }
+      document.getElementById('apiEnvironment').value = apiEnvironment;
+
+      // Show info if URL params were used
+      if (urlParams.apiKey || urlParams.frameId) {
+        log('🔗 Config loaded from URL parameters', 'success');
+      } else if (stored.apiKey || stored.frameId) {
+        log('💾 Config restored from localStorage', 'success');
+      }
+    }
+
+    /**
+     * Setup auto-save on input changes
+     */
+    function setupAutoSave() {
+      const inputs = ['apiKey', 'frameId', 'resolution', 'vastMode', 'debugMode', 'minBid', 'apiEnvironment'];
+      inputs.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.addEventListener('change', saveToStorage);
+          element.addEventListener('input', saveToStorage);
+        }
+      });
+    }
+
+    function updateTitleDisplay(title) {
+      const titleStatus = document.getElementById('titleStatus');
+      titleStatus.textContent = `Title: ${title}`;
+
+      // Color coding based on title value
+      if (title === 'ready') {
+        titleStatus.style.background = 'var(--brutalist-success-bg)';
+        titleStatus.style.color = 'var(--brutalist-success-text)';
+      } else if (title === 'wait') {
+        titleStatus.style.background = 'var(--brutalist-warning-bg)';
+        titleStatus.style.color = 'var(--brutalist-warning-text)';
+      } else if (title.startsWith('skip')) {
+        titleStatus.style.background = 'var(--brutalist-error-bg)';
+        titleStatus.style.color = 'var(--brutalist-error-text)';
+      } else {
+        titleStatus.style.background = '#e5e7eb';
+        titleStatus.style.color = '#374151';
+      }
+    }
+
+    function startTitleMonitor() {
+      // Clear any existing interval
+      if (titleMonitorInterval) {
+        clearInterval(titleMonitorInterval);
+      }
+
+      // Poll the iframe title every 200ms
+      titleMonitorInterval = setInterval(() => {
+        try {
+          const iframe = document.getElementById('packageFrame');
+          if (iframe && iframe.contentDocument) {
+            const title = iframe.contentDocument.title;
+            if (title !== lastTitle) {
+              lastTitle = title;
+              updateTitleDisplay(title);
+              log(`📋 Title changed: "${title}"`, title.startsWith('skip') ? 'error' : (title === 'ready' ? 'success' : 'info'));
+            }
+          }
+        } catch (e) {
+          // Cross-origin or other access error
+        }
+      }, 200);
+    }
+
+    function setupBroadSignObject() {
+      const [width, height] = document.getElementById('resolution').value.split('x');
+      window.BroadSignObject = {
+        frame_id: document.getElementById('frameId').value,
+        display_unit_id: "test-display-unit",
+        player_id: "test-player",
+        frame_resolution: `${width}x${height}`,
+        display_unit_resolution: `${width}x${height}`,
+        campaign_id: "test-campaign-001",
+        impressions_per_hour: 100,
+        expected_slot_duration_ms: 15000,
+        dwell_time_duration_ms: 15000,
+        requestFocus: function() {
+          log('BroadSignObject.requestFocus() called', 'info');
+        }
+      };
+      log('BroadSignObject initialized: frame_id=' + window.BroadSignObject.frame_id, 'success');
+    }
+
+    function log(message, type = 'info') {
+      const timestamp = new Date().toTimeString().split(' ')[0];
+      const logs = document.getElementById('logs');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${timestamp}] ${message}`;
+      logs.appendChild(entry);
+      logs.scrollTop = logs.scrollHeight;
+      console.log(`[${timestamp}] ${message}`);
+    }
+
+    function setStatus(text, className) {
+      const status = document.getElementById('status');
+      status.textContent = text;
+      status.className = `status ${className}`;
+    }
+
+    function clearLogs() {
+      document.getElementById('logs').innerHTML = '';
+      log('Logs cleared', 'info');
+    }
+
+    function updateContentSize() {
+      const [width, height] = document.getElementById('resolution').value.split('x');
+      const wrapper = document.querySelector('.content-wrapper');
+      if (wrapper) {
+        const containerWidth = document.getElementById('contentArea').clientWidth - 40;
+        const containerHeight = document.getElementById('contentArea').clientHeight - 40;
+        const scale = Math.min(containerWidth / parseInt(width), containerHeight / parseInt(height), 1);
+
+        wrapper.style.width = width + 'px';
+        wrapper.style.height = height + 'px';
+        wrapper.style.transform = `scale(${scale})`;
+      }
+    }
+
+    function loadPackage() {
+      log('=== Loading Package ===', 'success');
+
+      // Reset title monitor
+      lastTitle = null;
+      updateTitleDisplay('—');
+
+      setupBroadSignObject();
+
+      // Update config.js with API key
+      const apiKey = document.getElementById('apiKey').value;
+      const vastMode = document.getElementById('vastMode').checked;
+      const debugMode = document.getElementById('debugMode').checked;
+      const minBid = document.getElementById('minBid').value;
+      const apiBaseUrl = document.getElementById('apiEnvironment').value;
+
+      const envName = apiBaseUrl.includes('staging') ? 'Staging' : 'Production';
+      log('Config: ' + envName + ', API Key set, VAST=' + vastMode + ', Debug=' + debugMode, 'info');
+
+      // Store config in parent window so iframe can access it immediately
+      window.ADLOCAITE_TEST_CONFIG = {
+        apiKey,
+        apiBaseUrl,
+        vastMode,
+        debugMode,
+        minBidCents: parseInt(minBid)
+      };
+      log('Config stored in parent window for early access', 'info');
+
+      const packageUrl = '../package/index.html';
+
+      const [width, height] = document.getElementById('resolution').value.split('x');
+      log(`Resolution: ${width}×${height}`, 'info');
+
+      const contentArea = document.getElementById('contentArea');
+      const wrapper = document.createElement('div');
+      wrapper.className = 'content-wrapper';
+      wrapper.style.width = width + 'px';
+      wrapper.style.height = height + 'px';
+
+      const iframe = document.createElement('iframe');
+      iframe.src = packageUrl;
+      iframe.id = 'packageFrame';
+
+      iframe.onload = function() {
+        packageWindow = iframe.contentWindow;
+        log('Package loaded successfully', 'success');
+
+        // Intercept iframe console.log to show in test interface
+        if (packageWindow) {
+          const originalLog = packageWindow.console.log;
+          const originalError = packageWindow.console.error;
+
+          packageWindow.console.log = function(...args) {
+            originalLog.apply(packageWindow.console, args);
+            const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+            // Highlight important events
+            if (message.includes('pre-loaded') || message.includes('Pre-load complete') || message.includes('Playing pre-loaded')) {
+              log('📦 ' + message, 'success');
+            } else if (message.includes('BroadSignPlay')) {
+              log('🎬 ' + message, 'info');
+            }
+          };
+
+          packageWindow.console.error = function(...args) {
+            originalError.apply(packageWindow.console, args);
+            const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+            log('❌ ' + message, 'error');
+          };
+        }
+
+        if (packageWindow) {
+          // Inject BroadSignObject
+          packageWindow.BroadSignObject = window.BroadSignObject;
+
+          // Update config if accessible
+          if (packageWindow.ADLOCAITE_CONFIG) {
+            packageWindow.ADLOCAITE_CONFIG.apiKey = apiKey;
+            packageWindow.ADLOCAITE_CONFIG.apiBaseUrl = apiBaseUrl;
+            packageWindow.ADLOCAITE_CONFIG.vastMode = vastMode;
+            packageWindow.ADLOCAITE_CONFIG.debugMode = debugMode;
+            packageWindow.ADLOCAITE_CONFIG.minBidCents = parseInt(minBid);
+            log('Config injected into package', 'success');
+          }
+
+          // Start title monitoring
+          startTitleMonitor();
+
+          // Update debug panel visibility (since initialize() already ran)
+          const debugPanel = packageWindow.document.getElementById('debug-panel');
+          if (debugPanel) {
+            debugPanel.style.display = debugMode ? 'block' : 'none';
+            log('Debug panel: ' + (debugMode ? 'shown' : 'hidden'), 'info');
+          }
+
+          log('BroadSignObject injected', 'success');
+        }
+
+        updateContentSize();
+        setStatus('Loaded', 'ready');
+        document.getElementById('playBtn').disabled = false;
+        log('Ready to trigger BroadSignPlay()', 'info');
+      };
+
+      iframe.onerror = function() {
+        log('ERROR: Failed to load package', 'error');
+        setStatus('Error', 'error');
+      };
+
+      wrapper.appendChild(iframe);
+      contentArea.innerHTML = '';
+      contentArea.appendChild(wrapper);
+
+      setStatus('Loading...', 'running');
+      document.getElementById('loadBtn').disabled = true;
+    }
+
+    function triggerPlay() {
+      log('=== Triggering BroadSignPlay() ===', 'success');
+      setStatus('Playing...', 'running');
+
+      const iframe = document.getElementById('packageFrame');
+      if (!iframe || !iframe.contentWindow) {
+        log('ERROR: Package not loaded', 'error');
+        return;
+      }
+
+      try {
+        if (typeof iframe.contentWindow.BroadSignPlay === 'function') {
+          iframe.contentWindow.BroadSignPlay();
+          log('BroadSignPlay() executed', 'success');
+        } else {
+          log('ERROR: BroadSignPlay() not found', 'error');
+          setStatus('Error', 'error');
+        }
+      } catch (err) {
+        log('ERROR: ' + err.message, 'error');
+        setStatus('Error', 'error');
+      }
+    }
+
+    // Initialize on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      initializeForm();
+      setupAutoSave();
+      log('Test suite ready', 'info');
+
+      const urlParams = getUrlParams();
+      if (urlParams.apiKey || urlParams.frameId) {
+        log('💡 TIP: Bookmark this URL to keep your config!', 'success');
+      } else {
+        log('💡 TIP: Add ?api_key=xxx&frame_id=yyy to URL for quick testing', 'info');
+      }
+    });
+
+    window.addEventListener('resize', updateContentSize);
+  </script>
+</body>
+</html>

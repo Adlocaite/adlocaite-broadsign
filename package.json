@@ -1,0 +1,31 @@
+{
+  "name": "adlocaite-broadsign-integration",
+  "version": "1.0.0",
+  "description": "Broadsign Control HTML5 Package for Adlocaite programmatic DOOH integration",
+  "scripts": {
+    "package": "cd package && zip -r ../adlocaite-broadsign.x-html-package index.html js/ css/ assets/",
+    "clean": "rm -f adlocaite-broadsign.x-html-package",
+    "test:serve": "node test/server.js",
+    "test": "echo 'Manual test: npm run test:serve, then open http://127.0.0.1:8000/test/'"
+  },
+  "keywords": [
+    "broadsign",
+    "adlocaite",
+    "dooh",
+    "programmatic",
+    "vast"
+  ],
+  "author": "Adlocaite",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adlocaite/adlocaite-broadsign.git"
+  },
+  "homepage": "https://github.com/adlocaite/adlocaite-broadsign#readme",
+  "bugs": {
+    "url": "https://github.com/adlocaite/adlocaite-broadsign/issues",
+    "email": "support@adlocaite.com"
+  }
+}
+
+
