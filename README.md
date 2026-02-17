@@ -21,7 +21,8 @@ When Broadsign plays an ad slot assigned to this package, the following happens:
 
 V2 will address the limitations above:
 
-- **Pre-Loading** — Load content during Broadsign's off-screen pre-buffering phase (before `BroadSignPlay()`), enabling instant playback with no visible delay.
+- **Content Pre-Loading** — Load content during Broadsign's off-screen pre-buffering phase (before `BroadSignPlay()`), enabling instant playback with no visible delay.
+- **Asset Pre-Caching** — Background cache manager that periodically fetches upcoming ad assets and stores them in the browser cache, reducing load times and providing resilience against temporary network issues.
 - **Skip Signal Support** — Signal "skip" before Broadsign's check window, enabling automatic waterfall fallback without a dedicated fallback campaign.
 - **Screen ID Fallback Chain** — Fall back to `display_unit_id` or `player_id` when `frame_id` is not configured.
 
