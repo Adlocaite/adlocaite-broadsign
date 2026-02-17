@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Prepare build environment
+        run: |
+          cp package/js/config.example.js package/js/config.js
+          sed -i "s/apiKey: 'pub_xxxx'/apiKey: 'pub_CI_BUILD'/" package/js/config.js
+
+      - name: Build package
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Verify package
+        run: |
+          if [ ! -f "adlocaite-broadsign.x-html-package" ]; then
+            echo "ERROR: Package file not found"
+            exit 1
+          fi
+
+          # Verify it's a valid zip
+          unzip -t adlocaite-broadsign.x-html-package
+
+          # Verify required files are in the package
+          unzip -l adlocaite-broadsign.x-html-package | grep -q "index.html" || { echo "ERROR: index.html missing"; exit 1; }
+          unzip -l adlocaite-broadsign.x-html-package | grep -q "js/config.js" || { echo "ERROR: config.js missing"; exit 1; }
+          unzip -l adlocaite-broadsign.x-html-package | grep -q "js/broadsign-adapter.js" || { echo "ERROR: broadsign-adapter.js missing"; exit 1; }
+          unzip -l adlocaite-broadsign.x-html-package | grep -q "js/adlocaite-api.js" || { echo "ERROR: adlocaite-api.js missing"; exit 1; }
+          unzip -l adlocaite-broadsign.x-html-package | grep -q "js/vast-parser.js" || { echo "ERROR: vast-parser.js missing"; exit 1; }
+          unzip -l adlocaite-broadsign.x-html-package | grep -q "js/player.js" || { echo "ERROR: player.js missing"; exit 1; }
+
+          echo "All required files present in package"
