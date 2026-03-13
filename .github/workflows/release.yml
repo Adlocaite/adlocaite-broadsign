@@ -22,10 +22,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.DEPLOY_PAT }}
 
       - name: Get PR labels
         id: pr-labels
@@ -137,7 +137,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # v4
         with:
           ref: main
           fetch-depth: 0
@@ -182,7 +182,7 @@ jobs:
           echo "Artifact renamed to: adlocaite-broadsign-v${VERSION}.x-html-package"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: Release v${{ steps.version.outputs.version }}
@@ -218,11 +218,11 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # v4
         with:
           ref: dev
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.DEPLOY_PAT }}
 
       - name: Configure git
         run: |
@@ -297,7 +297,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # v4
         with:
           fetch-depth: 0
 
@@ -379,7 +379,7 @@ jobs:
           echo "Artifact renamed to: $ARTIFACT_NAME"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.artifact.outputs.artifact_name }}
           path: ${{ steps.artifact.outputs.artifact_name }}
