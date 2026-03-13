@@ -40,7 +40,7 @@ jobs:
 
       - name: Post warning comment
         if: steps.check.outputs.status != 'valid'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           TOKEN_STATUS: ${{ steps.check.outputs.status }}
           HTTP_CODE: ${{ steps.check.outputs.http_code }}
@@ -116,7 +116,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # v4
+        uses: actions/checkout@v6 # v4
 
       - name: Prepare build environment
         run: |
