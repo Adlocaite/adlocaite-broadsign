@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # GitHub Actions updates (only ecosystem for this repo)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Berlin"
+    target-branch: "dev"
+    open-pull-requests-limit: 3
+    groups:
+      github-actions:
+        patterns:
+          - "*"

@@ -32,6 +32,9 @@ node_modules/
 temp/
 tmp/
 
+# Worktrees (used for Dependabot updates, see docs/DEPENDABOT.md)
+.worktrees/
+
 # Claude Code
 .claude/
 .mcp.json
