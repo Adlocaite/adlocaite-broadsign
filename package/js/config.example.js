@@ -31,20 +31,6 @@ const ADLOCAITE_CONFIG = {
   minBidCents: 100,
 
   /**
-   * Enable asset pre-caching
-   * When enabled, the player will periodically fetch cacheable assets
-   * and store them in browser cache for offline playback
-   */
-  enableCaching: true,
-
-  /**
-   * Caching interval in milliseconds
-   * How often to refresh the cache with new assets
-   * Default: 300000 (5 minutes)
-   */
-  cachingInterval: 300000,
-
-  /**
    * VAST mode
    * When true, requests will include vast=true parameter to receive VAST XML
    * VAST provides automatic tracking and better player compatibility
@@ -71,12 +57,6 @@ const ADLOCAITE_CONFIG = {
   assetTimeout: 20000,
 
   /**
-   * Maximum lifecycle duration in milliseconds
-   * Total time allowed for offer request, acceptance, and playout
-   */
-  maxLifecycleDuration: 60000,
-
-  /**
    * Retry configuration
    * Number of times to retry failed API requests
    */
@@ -86,7 +66,25 @@ const ADLOCAITE_CONFIG = {
    * Retry delay in milliseconds
    * Initial delay before first retry (exponential backoff applied)
    */
-  retryDelay: 1000
+  retryDelay: 1000,
+
+  /**
+   * Axiom logging - ingest-only API token
+   * Leave empty to disable remote error logging
+   * Get from Axiom dashboard > Settings > API Tokens (ingest-only permission)
+   */
+  axiomToken: '',
+
+  /**
+   * Axiom dataset name
+   * Error events are sent to this dataset for monitoring
+   */
+  axiomDataset: 'broadsign',
+
+  /**
+   * Package version (auto-injected by build.sh from package.json)
+   */
+  packageVersion: '2.0.0'
 };
 
 // Make config globally available

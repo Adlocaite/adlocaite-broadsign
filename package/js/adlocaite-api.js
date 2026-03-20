@@ -107,11 +107,15 @@ class AdlocaiteAPIClient {
 
       // For other 4xx errors, log but don't throw (prevents Broadsign auto-skip)
       if (response.status >= 400 && response.status < 500) {
-        this.error(`Client error ${response.status}: ${response.statusText}`, errorData);
+        const apiMessage = (errorData.body && typeof errorData.body === 'object')
+          ? (errorData.body.error || errorData.body.message || `HTTP ${response.status}`)
+          : `HTTP ${response.status}`;
+        this.error(`API error ${response.status}: ${apiMessage}`, errorData);
         return {
           error: true,
           status: response.status,
-          message: `Client error: ${response.statusText}`,
+          message: apiMessage,
+          errorCode: errorData.body?.error_code || null,
           data: errorData
         };
       }
@@ -146,7 +150,7 @@ class AdlocaiteAPIClient {
       }
 
       // Retry on network errors
-      if (retryCount < this.maxRetries && err.message.includes('fetch')) {
+      if (retryCount < this.maxRetries && (err instanceof TypeError || err.name === 'TypeError')) {
         const delay = this.retryDelay * Math.pow(2, retryCount);
         this.log(`Retrying after network error: ${delay}ms (attempt ${retryCount + 1}/${this.maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -171,10 +175,8 @@ class AdlocaiteAPIClient {
   async requestOffer(screenId, options = {}) {
     const params = new URLSearchParams();
     
-    const minBidCents = options.minBidCents || this.config.minBidCents;
-    if (minBidCents) {
-      params.append('min_bid_cents', minBidCents);
-    }
+    const minBidCents = options.minBidCents ?? this.config.minBidCents ?? 0;
+    params.append('min_bid_cents', minBidCents);
 
     if (options.vast !== undefined ? options.vast : this.config.vastMode) {
       params.append('vast', 'true');
@@ -211,10 +213,8 @@ class AdlocaiteAPIClient {
   async requestOfferByExternalId(externalId, options = {}) {
     const params = new URLSearchParams();
     
-    const minBidCents = options.minBidCents || this.config.minBidCents;
-    if (minBidCents) {
-      params.append('min_bid_cents', minBidCents);
-    }
+    const minBidCents = options.minBidCents ?? this.config.minBidCents ?? 0;
+    params.append('min_bid_cents', minBidCents);
 
     if (options.vast !== undefined ? options.vast : this.config.vastMode) {
       params.append('vast', 'true');
@@ -329,70 +329,6 @@ class AdlocaiteAPIClient {
     }
   }
 
-  /**
-   * Get cacheable assets for a screen
-   * 
-   * @param {string} screenId - Screen UUID
-   * @param {object} options - Request options
-   * @param {number} options.minBidCents - Minimum bid filter
-   * @returns {Promise<object>} Cacheable assets list
-   */
-  async getCacheableAssets(screenId, options = {}) {
-    const params = new URLSearchParams();
-    
-    const minBidCents = options.minBidCents || this.config.minBidCents;
-    if (minBidCents) {
-      params.append('min_bid_cents', minBidCents);
-    }
-
-    const url = `${this.baseUrl}/screens/${screenId}/cacheable-assets?${params.toString()}`;
-    
-    this.log(`Requesting cacheable assets for screen: ${screenId}`);
-    
-    try {
-      const response = await this.makeRequest(url, {
-        method: 'GET'
-      });
-
-      this.log('Cacheable assets received', response);
-      return response;
-    } catch (err) {
-      this.error(`Failed to get cacheable assets for screen ${screenId}`, err);
-      throw err;
-    }
-  }
-
-  /**
-   * Get cacheable assets using external screen ID
-   * 
-   * @param {string} externalId - External screen identifier
-   * @param {object} options - Request options
-   * @returns {Promise<object>} Cacheable assets list
-   */
-  async getCacheableAssetsByExternalId(externalId, options = {}) {
-    const params = new URLSearchParams();
-    
-    const minBidCents = options.minBidCents || this.config.minBidCents;
-    if (minBidCents) {
-      params.append('min_bid_cents', minBidCents);
-    }
-
-    const url = `${this.baseUrl}/screens/external-id/${externalId}/cacheable-assets?${params.toString()}`;
-    
-    this.log(`Requesting cacheable assets for external ID: ${externalId}`);
-    
-    try {
-      const response = await this.makeRequest(url, {
-        method: 'GET'
-      });
-
-      this.log('Cacheable assets received', response);
-      return response;
-    } catch (err) {
-      this.error(`Failed to get cacheable assets for external ID ${externalId}`, err);
-      throw err;
-    }
-  }
 }
 
 // Make class globally available

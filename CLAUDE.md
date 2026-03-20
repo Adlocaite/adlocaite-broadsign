@@ -43,7 +43,12 @@ Key configuration options in `config.js`:
 - `vastMode`: Enable VAST XML response format
 - `debugMode`: Enable console logging
 
-Note: In V1, the skip signal mechanism has a timing limitation (see "Known Issues"). Publishers should configure a fallback campaign in Broadsign Control that plays when Adlocaite has no ad to serve.
+Additional configuration options (V2):
+- `axiomToken`: Axiom ingest-only API token for remote error logging (leave empty to disable)
+- `axiomDataset`: Axiom dataset name (default: `broadsign`)
+- `packageVersion`: Version string (auto-injected by build.sh)
+
+Note: Publishers should configure a fallback campaign in Broadsign Control that plays when Adlocaite has no ad to serve (skip signal).
 
 ## Architecture
 
@@ -57,6 +62,7 @@ package/
 ├── js/
 │   ├── config.js          # Configuration (not in git, created from example)
 │   ├── config.example.js  # Configuration template
+│   ├── logger.js              # AdlocaiteLogger class - Console + Axiom logging
 │   ├── broadsign-adapter.js   # BroadsignAdapter class - Broadsign API integration
 │   ├── adlocaite-api.js       # AdlocaiteAPIClient class - REST API client
 │   ├── vast-parser.js         # VASTParser class - VAST XML parsing
@@ -87,11 +93,18 @@ package/
 - Request timeout handling (default: 10s)
 - Bearer token authentication via `Authorization` header
 
+**AdlocaiteLogger** (logger.js):
+- Centralized logging with Axiom integration for production error reporting
+- Buffers events and flushes periodically (10s) or immediately on errors
+- Without `axiomToken`: console-only logging (graceful degradation)
+- Uses `navigator.sendBeacon` for reliable delivery during page unload
+- Never blocks playback
+
 **VASTParser** (vast-parser.js):
-- Parses VAST 2.0/3.0/4.0 XML responses
+- Parses VAST 4.0 InLine XML responses (backend always returns InLine, never Wrapper)
 - Extracts MediaFiles, tracking events, click tracking, custom extensions
 - Provides `getBestMediaFile()` to select optimal media based on type/bitrate
-- Extracts deal_id from VAST Extensions or AdParameters
+- Extracts OfferId, BidPriceCents, ExpiresAt from Adlocaite VAST Extensions
 
 **AdlocaitePlayer** (player.js):
 - Handles video and image playback
@@ -101,27 +114,25 @@ package/
 
 ### Execution Flow
 
-The package attempts to pre-load content during Broadsign's off-screen pre-buffering phase, but in V1 this typically falls back to loading at display time because `frame_id` is not reliably available before `BroadSignPlay()`.
+The package pre-loads content during Broadsign's off-screen PREBUFFER phase. All BroadSignObject properties (including `frame_id`) are available during PREBUFFER, so pre-loading works reliably.
 
-**Phase 1: Initialization (DOMContentLoaded)**
-1. Broadsign Player loads HTML package (off-screen)
-2. `DOMContentLoaded` → `AdlocaiteApp.initialize()` runs
-3. `initialize()` attempts to get screen ID via `BroadSignObject.frame_id`
-4. If screen ID is available: starts `preloadContent()` in background
-5. If screen ID is NOT available (typical in V1): pre-loading is skipped
+**Phase 1: Initialization & Pre-Loading (DOMContentLoaded / PREBUFFER)**
+1. Broadsign Player loads HTML package (off-screen, PREBUFFER state)
+2. `BroadSignObject` is available with all properties as strings
+3. `DOMContentLoaded` → `AdlocaiteApp.initialize()` runs
+4. `initialize()` gets screen ID via `BroadSignObject.frame_id`
+5. `preloadContent()` runs in background:
+   - Request offer from Adlocaite API (with `vast=true`)
+   - Parse VAST XML, extract OfferId from Extensions
+   - Accept offer → get deal_id
+   - Pre-load media asset (`canplaythrough` for video)
+6. Title set to `ready` or `skip:reason`
 
 **Phase 2: Display (BroadSignPlay)**
-6. Broadsign calls global `BroadSignPlay()` when ad copy is about to display
-7. If pre-loading was skipped: `start()` gets screen ID now and loads content
-   - Request offer from Adlocaite API (with `vast=true`)
-   - Parse VAST XML to extract media URL
-   - Accept offer to get deal_id (if not in VAST)
-   - Load and play video (`canplaythrough`) or image
-8. If pre-loading succeeded: play pre-loaded content immediately
+7. Broadsign calls global `BroadSignPlay()` when ad copy is about to display
+8. Play pre-loaded content immediately (no loading delay)
 9. Fire VAST tracking events during playback
 10. Confirm playout via API with deal_id
-
-**Known V1 Limitation:** In most Broadsign setups, `frame_id` is not available during the pre-buffering phase, so content loads at display time. This can cause a brief visible loading delay. See "Known Issues" section below.
 
 **CRITICAL Implementation Notes:**
 - `BroadSignPlay()` can fire BEFORE `DOMContentLoaded` - code handles this
@@ -295,7 +306,7 @@ Expected log sequence:
 ## File Modification Notes
 
 - `index.html`: Contains main orchestration logic in inline `<script>` - keep it clean and delegate to modules
-- Module files are loaded in order: config → api → adapter → vast → player → cache-manager
+- Module files are loaded in order: config → logger → api → adapter → vast → player → cache-manager
 - Global classes are exposed via `window.ClassName` for cross-module access
 - Build scripts zip the entire `package/` directory - avoid adding unnecessary files
 
@@ -329,7 +340,7 @@ Expected log sequence:
 6. **BroadSignObject Property Access** (broadsign-adapter.js)
    - `getScreenId()` uses `BroadSignObject.frame_id` (direct property access)
    - `frame_id` represents individual screen/frame in Broadsign
-   - **Note:** `getDisplayUnitId()` and `getPlayerId()` still check for non-existent methods — they silently return null. This is a known issue for V2.
+   - V2: Removed `getDisplayUnitId()` and `getPlayerId()` methods. `getPlayerInfo()` reads all properties directly.
 
 7. **External ID API Endpoints** (adlocaite-api.js)
    - Uses `/offers/request/external-id/{externalId}` endpoint
@@ -343,7 +354,7 @@ Expected log sequence:
 
 ### Pre-Loading Architecture (2025-01-27)
 
-The pre-loading code structure was added to load content during Broadsign's off-screen pre-buffering phase. However, in V1 this has a **known limitation**: `frame_id` is typically not available until `BroadSignPlay()` fires, so pre-loading is skipped and content loads at display time instead.
+The pre-loading code structure loads content during Broadsign's off-screen PREBUFFER phase. In V2, this works reliably because `frame_id` is confirmed available during PREBUFFER.
 
 9. **Pre-Loading in initialize()** (index.html)
     - `preloadContent()` method runs during off-screen buffering (if screen ID available)
@@ -356,18 +367,18 @@ The pre-loading code structure was added to load content during Broadsign's off-
 
 ### Skip Signal Mechanism
 
-The package uses Broadsign's `<title>` tag to signal skip status. The code sets skip signals at various error points (no offers, API error, no screen ID, init failed). However, in V1 there is a **known timing limitation** — see "Known Issues" below.
+The package uses Broadsign's `<title>` tag to signal skip status. The code sets skip signals at various error points (no offers, API error, no screen ID, init failed). With V2 pre-loading during PREBUFFER, skip signals are set early enough for Broadsign to act on them.
 
-## Known Issues (V1)
+## V1 Known Issues (Resolved in V2)
 
-### 1. Pre-Loading Timing
-`BroadSignObject.frame_id` is typically not available during the off-screen pre-buffering phase (before `BroadSignPlay()`). This means content loads at display time, causing a brief visible loading delay. The loading screen (spinner) is shown during this time.
+### 1. Pre-Loading Timing — RESOLVED
+~~`frame_id` not available during PREBUFFER.~~ Confirmed by Broadsign operator: all BroadSignObject properties are available during PREBUFFER state. Pre-loading works reliably in V2.
 
-### 2. Skip Signal Timing
-Broadsign checks the `<title>` skip signal at T+1s and T+2s after page load. In V1, the skip decision often happens after `BroadSignPlay()` fires (later than T+2s), so Broadsign does not act on it. Publishers must configure a fallback campaign in Broadsign Control.
+### 2. Skip Signal Timing — RESOLVED
+~~Skip signals set too late.~~ With pre-loading during PREBUFFER, skip signals are now set early enough for Broadsign's T+1s/T+2s check. Publishers should still configure a fallback campaign.
 
-### 3. getDisplayUnitId() / getPlayerId() Use Wrong API
-`broadsign-adapter.js` methods `getDisplayUnitId()` and `getPlayerId()` check for non-existent `BroadSignObject.getDisplayUnitId()` / `BroadSignObject.getPlayerId()` methods instead of accessing properties directly. They silently return null.
+### 3. getDisplayUnitId() / getPlayerId() — RESOLVED
+~~Methods checked for non-existent getters.~~ Removed these methods in V2. `getPlayerInfo()` reads all BroadSignObject properties directly.
 
-### 4. Screen ID Has No Fallback Chain
-V1 only checks `frame_id` for screen identification. If `frame_id` is not configured in Broadsign ("Append Frame Id" option), the package has no fallback to `display_unit_id` or `player_id`.
+### 4. Screen ID Fallback Chain — NOT NEEDED
+`frame_id` is the correct and only identifier for a screen surface. `display_unit_id` identifies the entire display (which can have multiple frames, e.g., front/back). Fallback to `display_unit_id` would be incorrect. Added URL parameter fallback for `com.broadsign.suite.bsp.frame_id`.
