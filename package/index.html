@@ -312,6 +312,9 @@
           await this.player.preloadMedia(mediaFile);
           this.log('Pre-load: Media ready');
 
+          // Swap spinner for media element while still off-screen (PREBUFFER)
+          this.player.showPreloadedMedia();
+
           // Store result
           this.preloadedContent = { vastData, dealId, mediaFile, ready: true };
           this.setPlaybackStatus('ready');

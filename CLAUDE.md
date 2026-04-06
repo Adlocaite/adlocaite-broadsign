@@ -66,8 +66,7 @@ package/
 │   ├── broadsign-adapter.js   # BroadsignAdapter class - Broadsign API integration
 │   ├── adlocaite-api.js       # AdlocaiteAPIClient class - REST API client
 │   ├── vast-parser.js         # VASTParser class - VAST XML parsing
-│   ├── player.js              # AdlocaitePlayer class - Media playback
-│   └── cache-manager.js       # CacheManager class - Asset pre-caching
+│   └── player.js              # AdlocaitePlayer class - Media playback
 └── css/styles.css
 ```
 
@@ -77,17 +76,22 @@ package/
 - Main orchestrator that coordinates all modules
 - Handles initialization flow and `BroadSignPlay()` lifecycle
 - Manages overall application state
+- Centralized `setPlaybackStatus()` method that atomically: sends WebSocket skip/stop command, logs to Axiom, and updates UI
+- Global error handlers (`window.onerror`, `unhandledrejection`) catch uncaught errors and trigger skip
 
 **BroadsignAdapter** (broadsign-adapter.js):
 - Interfaces with Broadsign Control Player via global `BroadSignObject`
 - Provides screen identification: `getScreenId()` reads `BroadSignObject.frame_id` as external ID
+- URL parameter fallback: checks `com.broadsign.suite.bsp.frame_id`
+- `isBroadsignEnvironment()` validates BroadSignObject is properly initialized
+- `getBroadSignObject()` checks local AND parent window (for test environments)
 - Tracks playback state and duration
 - Generates playout tracking data
-- Defines global `BroadSignPlay()` function (called by Broadsign when ad copy starts)
+- Defines global `BroadSignPlay()` function which dispatches to `window.onBroadSignReady` handler or `broadsignready` custom event
 
 **AdlocaiteAPIClient** (adlocaite-api.js):
 - Handles all HTTP communication with Adlocaite API
-- Methods: `requestOfferByExternalId()`, `acceptOffer()`, `rejectOffer()`, `confirmPlayout()`
+- Methods: `requestOfferByExternalId()`, `requestOffer()`, `acceptOffer()`, `rejectOffer()`, `confirmPlayout()`
 - Uses External ID endpoints to support Broadsign frame_id as screen identifier
 - Implements retry logic with exponential backoff
 - Request timeout handling (default: 10s)
@@ -97,18 +101,21 @@ package/
 - Centralized logging with Axiom integration for production error reporting
 - Buffers events and flushes periodically (10s) or immediately on errors
 - Without `axiomToken`: console-only logging (graceful degradation)
-- Uses `navigator.sendBeacon` for reliable delivery during page unload
+- Uses `fetch` with `keepalive: true` for reliable delivery during page unload
 - Never blocks playback
 
 **VASTParser** (vast-parser.js):
 - Parses VAST 4.0 InLine XML responses (backend always returns InLine, never Wrapper)
 - Extracts MediaFiles, tracking events, click tracking, custom extensions
 - Provides `getBestMediaFile()` to select optimal media based on type/bitrate
-- Extracts OfferId, BidPriceCents, ExpiresAt from Adlocaite VAST Extensions
+- Extracts OfferId, DealId, BidPriceCents, ExpiresAt from Adlocaite VAST Extensions (supports multiple naming variants)
+- Falls back to AdParameters JSON parsing for deal_id/offer_id
 
 **AdlocaitePlayer** (player.js):
 - Handles video and image playback
 - HTML5 `<video>` for video files, `<img>` with timed duration for images
+- `preloadMedia()`, `preloadVideo()`, `preloadImage()` for pre-loading during PREBUFFER
+- `playPreloaded()` for instant playback of pre-loaded content
 - Fires VAST tracking events (impression, start, quartiles, complete)
 - Calls `confirmPlayout()` via API after playback completion
 
@@ -126,16 +133,19 @@ The package pre-loads content during Broadsign's off-screen PREBUFFER phase. All
    - Parse VAST XML, extract OfferId from Extensions
    - Accept offer → get deal_id
    - Pre-load media asset (`canplaythrough` for video)
-6. Title set to `ready` or `skip:reason`
+6. WebSocket `skip_next` command sent if skipping, or content ready for playback
 
 **Phase 2: Display (BroadSignPlay)**
 7. Broadsign calls global `BroadSignPlay()` when ad copy is about to display
-8. Play pre-loaded content immediately (no loading delay)
-9. Fire VAST tracking events during playback
-10. Confirm playout via API with deal_id
+8. `BroadSignPlay()` dispatches via `window.onBroadSignReady` or `broadsignready` event
+9. Handler waits for initialization (30s timeout), then calls `app.start()`
+10. Play pre-loaded content immediately (no loading delay)
+11. Fire VAST tracking events during playback
+12. Confirm playout via API with deal_id
 
 **CRITICAL Implementation Notes:**
-- `BroadSignPlay()` can fire BEFORE `DOMContentLoaded` - code handles this
+- `BroadSignPlay()` can fire BEFORE `DOMContentLoaded` - code handles this via dual handler (function + event)
+- `BroadSignPlay()` is idempotent (`window._adlocaiteBroadSignPlayCalled` flag prevents duplicate execution)
 - 404 errors are handled gracefully (no throw) to prevent Broadsign auto-skip
 - Videos use `muted=true` for Chromium v87+ autoplay compatibility
 - Videos use `preload="auto"` for aggressive buffering
@@ -147,9 +157,9 @@ The package pre-loads content during Broadsign's off-screen PREBUFFER phase. All
 ### Broadsign Integration
 
 **Critical Lifecycle:**
-- The package MUST define a global `BroadSignPlay()` function (defined in broadsign-adapter.js:259)
+- The package MUST define a global `BroadSignPlay()` function (defined in broadsign-adapter.js)
 - `BroadSignPlay()` is called by Broadsign **when the ad copy displays**, NOT at page load
-- Use `BroadSignPlay()` for: video pre-buffering, controlling start timing, requesting focus
+- The main orchestration is in index.html via `onBroadSignReady` handler and `broadsignready` event listener
 
 **BroadSignObject API:**
 
@@ -173,6 +183,21 @@ Documentation: https://docs.broadsign.com/broadsign-control/latest/content-varia
 - Testing in regular browser will use fallback screen IDs (test-screen-{timestamp})
 - Packages are downloaded and unzipped before playback; if timing doesn't allow completion, ad slot is skipped
 - HTTP errors (4xx/5xx) from external requests trigger automatic playback skipping
+- **Remote Control must be enabled** in Broadsign Player for WebSocket skip to work
+
+### WebSocket Skip Command (V2)
+
+The package sends WebSocket commands to Broadsign's Remote Control API at `ws://localhost:2326`. This is the **only** reliable skip mechanism — the `document.title` approach is not a real Broadsign feature and does not work.
+
+**Format:**
+```json
+{"rc": {"version": "1", "id": "<unique>", "action": "skip_next", "frame_id": "<frame_id>"}}
+```
+
+**Behavior:**
+- Fire-and-forget: errors are logged but never block playback
+- Only fires once per skip event (guarded by `_skipSent` flag)
+- Requires **Remote Control to be enabled** in Broadsign Control Player settings
 
 ### API Flow
 
@@ -194,13 +219,10 @@ The typical API flow is:
 - Remote servers (including Adlocaite API) must include `Access-Control-Allow-Origin: *` header
 - Custom authentication headers recommended for security (we use `Authorization: Bearer {apiKey}`)
 
-**Caching:**
-- Leverages Chromium's built-in caching mechanism for offline resilience
-- CacheManager pre-caches assets based on `cachingInterval` config
-
 ### VAST Handling
 
 - VAST XML can contain deal_id in `<Extensions>` → look for `<DealId>`, `<deal_id>`, or in `<AdParameters>` as JSON
+- Extension extraction supports multiple naming variants (CamelCase and snake_case)
 - MediaFiles are sorted by: progressive delivery first, then by bitrate (highest first)
 - Tracking events: impression (fired before playback), start, firstQuartile, midpoint, thirdQuartile, complete
 - Tracking pixels are fired via Image() objects with 5s timeout
@@ -209,30 +231,24 @@ The typical API flow is:
 
 **Skip Signal Mechanism (for Programmatic Waterfall):**
 
-The package uses Broadsign's `<title>` tag mechanism to signal skip status:
+The package uses WebSocket commands to Broadsign's Remote Control API (`ws://localhost:2326`). The `_skipSent` flag ensures skip commands are only sent once.
 
-| Title Value | Meaning |
-|-------------|---------|
-| `wait` | Still loading (initial state) |
-| `ready` | Content loaded, ready to play |
-| `skip` | Skip to next item in waterfall |
-| `skip:reason` | Skip with reason (e.g., `skip:no offers available`) |
+**Important:** The `document.title` skip mechanism (setting title to "skip") is **not a real Broadsign feature** and does not work. WebSocket is the only reliable skip mechanism. Remote Control must be enabled on the player.
 
-Broadsign checks the title 1 second after page load (max 2 seconds). If `skip`, Broadsign moves to the next item in the programmatic waterfall (e.g., another SSP or fallback bundle).
+**Two commands depending on timing:**
+- **`skip_next`**: Sent during PREBUFFER (before `BroadSignPlay()`) — skips the ad copy before it becomes visible
+- **`stop`**: Sent after `BroadSignPlay()` has fired — stops the currently visible content and moves to next item
 
 **When Skip is Signaled:**
-- `skip:no offers available` - API returned 404 (no offers)
-- `skip:api error` - API returned an error
-- `skip:no screen id` - No screen ID available
-- `skip:init failed` - Initialization failed
-- `skip:preload failed` - Pre-loading failed
+- `no offers available` - API returned 404 (no offers)
+- `api error` - API returned an error
+- `no screen id` - No screen ID available
+- `init failed` - Initialization failed
+- `preload failed` - Pre-loading failed
 
-**Implementation:**
-```javascript
-// Set status via setPlaybackStatus() method
-app.setPlaybackStatus('ready');           // Content ready
-app.setPlaybackStatus('skip', 'reason');  // Skip with reason
-```
+**Global Error Handlers:**
+- `window.onerror` catches synchronous errors → triggers skip
+- `window.addEventListener('unhandledrejection')` catches promise rejections → triggers skip
 
 **Fallback Behavior:**
 - Skip signal is the ONLY mechanism - no in-package fallback
@@ -240,11 +256,27 @@ app.setPlaybackStatus('skip', 'reason');  // Skip with reason
 - When skip is signaled, Broadsign moves to next waterfall item or shows fallback bundle
 
 **Error Handling:**
-- API retries (3x with exponential backoff) on 5xx errors and network failures
+- API: one immediate retry on network failure, then skip (no exponential backoff — PREBUFFER window is too short)
 - Tracking failures don't stop playback (logged but not thrown)
 - Playout confirmation failures are logged but don't throw errors
 
 ## Testing & Debugging
+
+### Test Server
+
+A local test server simulates the Broadsign environment:
+
+```bash
+npm run test:serve
+# Open http://127.0.0.1:8000/test/
+```
+
+The test server (`test/server.js`) provides:
+- `/package-sim` endpoint that serves `package/index.html` with a mock `BroadSignObject` injected
+- PREBUFFER simulation: BroadSignObject is injected BEFORE package scripts load
+- Query parameters for all BroadSignObject properties (e.g., `?frame_id=test-screen-1`)
+
+### Debug Mode
 
 Enable debug mode in config.js:
 ```javascript
@@ -292,7 +324,8 @@ Expected log sequence:
 
 ### When debugging Broadsign issues:
 - `BroadSignObject` is ONLY available inside Broadsign Control Player (Chromium v87+)
-- Don't test with browser navigation - upload to Broadsign for real testing
+- Use the test server (`npm run test:serve`) for local development with PREBUFFER simulation
+- For real-environment testing, upload to Broadsign
 - Check Broadsign Player logs (Chromium console) for output
 - Fallback screen IDs (starting with "test-") indicate non-Broadsign environment
 - Remember: `BroadSignPlay()` fires when ad displays, NOT at DOMContentLoaded
@@ -306,79 +339,21 @@ Expected log sequence:
 ## File Modification Notes
 
 - `index.html`: Contains main orchestration logic in inline `<script>` - keep it clean and delegate to modules
-- Module files are loaded in order: config → logger → api → adapter → vast → player → cache-manager
+- Module files are loaded in order: config → logger → api → adapter → vast → player
 - Global classes are exposed via `window.ClassName` for cross-module access
 - Build scripts zip the entire `package/` directory - avoid adding unnecessary files
 
-## Fixes Applied in V1
+## V2 Changes Summary
 
-### Initial Fixes (2025-01-07)
+### What changed from V1 to V2:
 
-1. **Initialization Race Condition** (index.html)
-   - `BroadSignPlay()` now waits for initialization to complete
-   - Prevents "Cannot start - not initialized" errors
-
-2. **HTTP 404 Graceful Handling** (adlocaite-api.js)
-   - 404 errors return `{noOffersAvailable: true}` instead of throwing
-   - Prevents Broadsign auto-skip, allows fallback content to display
-   - All 4xx errors handled gracefully to prevent auto-skip
-
-3. **Video Autoplay Fix** (player.js)
-   - Videos now use `muted: true` + `playsInline: true`
-   - Required for Chromium v87+ autoplay policies
-
-4. **BroadSignObject Validation** (broadsign-adapter.js)
-   - `isBroadsignEnvironment()` verifies object is fully initialized
-   - Checks for null and property availability
-
-5. **BroadSignPlay() Idempotency** (broadsign-adapter.js)
-   - Prevents duplicate execution if called multiple times
-   - Follows Broadsign best practices
-
-### BroadSignObject API Correction (2025-01-20)
-
-6. **BroadSignObject Property Access** (broadsign-adapter.js)
-   - `getScreenId()` uses `BroadSignObject.frame_id` (direct property access)
-   - `frame_id` represents individual screen/frame in Broadsign
-   - V2: Removed `getDisplayUnitId()` and `getPlayerId()` methods. `getPlayerInfo()` reads all properties directly.
-
-7. **External ID API Endpoints** (adlocaite-api.js)
-   - Uses `/offers/request/external-id/{externalId}` endpoint
-   - External ID endpoints accept any string (not just UUIDs)
-   - Allows Broadsign `frame_id` to be used directly as screen identifier
-
-8. **500 Error Graceful Handling** (adlocaite-api.js)
-   - 500 errors with "screen not found" messages handled gracefully
-   - Returns `{noOffersAvailable: true}` instead of throwing
-   - Prevents Broadsign auto-skip when screen is not registered
-
-### Pre-Loading Architecture (2025-01-27)
-
-The pre-loading code structure loads content during Broadsign's off-screen PREBUFFER phase. In V2, this works reliably because `frame_id` is confirmed available during PREBUFFER.
-
-9. **Pre-Loading in initialize()** (index.html)
-    - `preloadContent()` method runs during off-screen buffering (if screen ID available)
-    - Falls back to loading at `BroadSignPlay()` time when screen ID is not available
-
-10. **Video Pre-Loading** (player.js)
-    - `preloadMedia()`, `preloadVideo()`, `preloadImage()` methods
-    - Videos use `preload="auto"` and `canplaythrough` event
-    - `playPreloaded()` for instant playback of pre-loaded content
-
-### Skip Signal Mechanism
-
-The package uses Broadsign's `<title>` tag to signal skip status. The code sets skip signals at various error points (no offers, API error, no screen ID, init failed). With V2 pre-loading during PREBUFFER, skip signals are set early enough for Broadsign to act on them.
-
-## V1 Known Issues (Resolved in V2)
-
-### 1. Pre-Loading Timing — RESOLVED
-~~`frame_id` not available during PREBUFFER.~~ Confirmed by Broadsign operator: all BroadSignObject properties are available during PREBUFFER state. Pre-loading works reliably in V2.
-
-### 2. Skip Signal Timing — RESOLVED
-~~Skip signals set too late.~~ With pre-loading during PREBUFFER, skip signals are now set early enough for Broadsign's T+1s/T+2s check. Publishers should still configure a fallback campaign.
-
-### 3. getDisplayUnitId() / getPlayerId() — RESOLVED
-~~Methods checked for non-existent getters.~~ Removed these methods in V2. `getPlayerInfo()` reads all BroadSignObject properties directly.
-
-### 4. Screen ID Fallback Chain — NOT NEEDED
-`frame_id` is the correct and only identifier for a screen surface. `display_unit_id` identifies the entire display (which can have multiple frames, e.g., front/back). Fallback to `display_unit_id` would be incorrect. Added URL parameter fallback for `com.broadsign.suite.bsp.frame_id`.
+1. **Pre-Loading during PREBUFFER** — Content is loaded off-screen before `BroadSignPlay()`, eliminating visible loading delay
+2. **WebSocket Skip Signal** — `skip_next` command via Broadsign Remote Control API (`ws://localhost:2326`) for immediate, reliable skipping. Requires Remote Control to be enabled.
+3. **Axiom Remote Logging** — Centralized error/warning logging to Axiom for production monitoring (optional, graceful degradation without token)
+4. **Centralized Skip Handler** — `setPlaybackStatus()` atomically handles WebSocket skip/stop + Axiom logging + UI update
+5. **Global Error Handlers** — `window.onerror` and `unhandledrejection` catch uncaught errors and trigger skip
+6. **Removed CacheManager** — `cache-manager.js` removed; pre-loading replaces the need for background caching
+7. **Removed unnecessary getters** — `getDisplayUnitId()` and `getPlayerId()` removed; `getPlayerInfo()` reads BroadSignObject properties directly
+8. **Dual BroadSignPlay handler** — `window.onBroadSignReady` (function) + `broadsignready` (custom event) for robust lifecycle handling
+9. **Test Server** — `test/server.js` with PREBUFFER simulation for local development
+10. **`frame_id` confirmed as correct ID** — No fallback chain needed; `display_unit_id` is a different concept (entire display, not screen surface)

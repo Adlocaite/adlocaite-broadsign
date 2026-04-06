@@ -80,6 +80,21 @@ class AdlocaitePlayer {
     this.log('Media pre-loaded successfully');
   }
 
+  /**
+   * Swap loading spinner with pre-loaded media element.
+   * Called during PREBUFFER (off-screen) so the first frame
+   * is already visible when BroadSignPlay() makes the page appear.
+   */
+  showPreloadedMedia() {
+    if (!this.containerElement) return;
+    this.containerElement.innerHTML = '';
+    if (this.preloadedVideoElement) {
+      this.containerElement.appendChild(this.preloadedVideoElement);
+    } else if (this.preloadedImageElement) {
+      this.containerElement.appendChild(this.preloadedImageElement);
+    }
+  }
+
   async preloadVideo(mediaFile) {
     this.log('Pre-loading video:', mediaFile.url);
 
@@ -207,8 +222,12 @@ class AdlocaitePlayer {
     return new Promise((resolve, reject) => {
       this.videoElement = this.preloadedVideoElement;
 
-      this.containerElement.innerHTML = '';
-      this.containerElement.appendChild(this.videoElement);
+      // Only manipulate DOM if video isn't already in the container
+      // (showPreloadedMedia() may have placed it during PREBUFFER)
+      if (this.videoElement.parentNode !== this.containerElement) {
+        this.containerElement.innerHTML = '';
+        this.containerElement.appendChild(this.videoElement);
+      }
 
       this.videoElement.addEventListener('play', () => {
         this.isPlaying = true;
@@ -257,8 +276,11 @@ class AdlocaitePlayer {
     return new Promise((resolve) => {
       this.imageElement = this.preloadedImageElement;
 
-      this.containerElement.innerHTML = '';
-      this.containerElement.appendChild(this.imageElement);
+      // Only manipulate DOM if image isn't already in the container
+      if (this.imageElement.parentNode !== this.containerElement) {
+        this.containerElement.innerHTML = '';
+        this.containerElement.appendChild(this.imageElement);
+      }
 
       this.isPlaying = true;
       this.startTime = Date.now();
