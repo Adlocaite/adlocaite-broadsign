@@ -182,7 +182,7 @@ jobs:
           echo "Artifact renamed to: adlocaite-broadsign-v${VERSION}.x-html-package"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: Release v${{ steps.version.outputs.version }}
@@ -379,7 +379,7 @@ jobs:
           echo "Artifact renamed to: $ARTIFACT_NAME"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.artifact.outputs.artifact_name }}
           path: ${{ steps.artifact.outputs.artifact_name }}

@@ -61,7 +61,7 @@ jobs:
 
       - name: Post warning comment
         if: steps.check.outputs.status != 'valid'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           TOKEN_STATUS: ${{ steps.check.outputs.status }}
           HTTP_CODE: ${{ steps.check.outputs.http_code }}
