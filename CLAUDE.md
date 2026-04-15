@@ -149,8 +149,7 @@ The package pre-loads content during Broadsign's off-screen PREBUFFER phase. All
 - 404 errors are handled gracefully (no throw) to prevent Broadsign auto-skip
 - Videos use `muted=true` for Chromium v87+ autoplay compatibility
 - Videos use `preload="auto"` for aggressive buffering
-- Videos use `canplaythrough` event for pre-loading readiness
-- A loading screen (spinner) is shown in the HTML while content loads
+- Videos use `canplay` event for pre-loading readiness (streams remaining data during playback)
 
 ## Important Implementation Details
 
