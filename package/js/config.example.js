@@ -31,20 +31,6 @@ const ADLOCAITE_CONFIG = {
   minBidCents: 100,
 
   /**
-   * Enable asset pre-caching
-   * When enabled, the player will periodically fetch cacheable assets
-   * and store them in browser cache for offline playback
-   */
-  enableCaching: true,
-
-  /**
-   * Caching interval in milliseconds
-   * How often to refresh the cache with new assets
-   * Default: 300000 (5 minutes)
-   */
-  cachingInterval: 300000,
-
-  /**
    * VAST mode
    * When true, requests will include vast=true parameter to receive VAST XML
    * VAST provides automatic tracking and better player compatibility
@@ -53,40 +39,28 @@ const ADLOCAITE_CONFIG = {
 
   /**
    * Debug mode
-   * When enabled, logs detailed information to console
-   * Disable in production for better performance
+   * When enabled, logs detailed information to console and shows debug panel
+   * Disable in production
    */
   debugMode: false,
 
   /**
-   * Request timeout in milliseconds
-   * How long to wait for API responses before giving up
+   * Axiom logging - ingest-only API token
+   * Leave empty to disable remote error logging
+   * Get from Axiom dashboard > Settings > API Tokens (ingest-only permission)
    */
-  requestTimeout: 10000,
+  axiomToken: '',
 
   /**
-   * Asset loading timeout in milliseconds
-   * How long to wait for media assets to load
+   * Axiom dataset name
+   * Error events are sent to this dataset for monitoring
    */
-  assetTimeout: 20000,
+  axiomDataset: 'broadsign',
 
   /**
-   * Maximum lifecycle duration in milliseconds
-   * Total time allowed for offer request, acceptance, and playout
+   * Package version (auto-injected by build.sh from package.json)
    */
-  maxLifecycleDuration: 60000,
-
-  /**
-   * Retry configuration
-   * Number of times to retry failed API requests
-   */
-  maxRetries: 3,
-
-  /**
-   * Retry delay in milliseconds
-   * Initial delay before first retry (exponential backoff applied)
-   */
-  retryDelay: 1000
+  packageVersion: '2.0.0'
 };
 
 // Make config globally available

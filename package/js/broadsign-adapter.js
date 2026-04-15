@@ -12,8 +12,6 @@ class BroadsignAdapter {
   constructor(config) {
     this.config = config;
     this.screenId = null;
-    this.displayUnitId = null;
-    this.playerId = null;
     this.isPlaying = false;
     this.startTime = null;
   }
@@ -94,7 +92,7 @@ class BroadsignAdapter {
   /**
    * Get screen ID from Broadsign
    * Uses BroadSignObject.frame_id as external identifier
-   * Falls back to configured fallback or generates a test ID
+   * Falls back to Broadsign URL params or generic screen_id param
    */
   getScreenId() {
     if (this.screenId) {
@@ -124,71 +122,23 @@ class BroadsignAdapter {
       this.log('Not running in Broadsign environment - BroadSignObject not available');
     }
 
-    // Fallback: Check for URL parameter
+    // Fallback: Check for Broadsign's URL parameter (passed in source URL)
     const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('com.broadsign.suite.bsp.frame_id')) {
+      this.screenId = urlParams.get('com.broadsign.suite.bsp.frame_id');
+      this.log(`Screen ID from Broadsign URL parameter: ${this.screenId}`);
+      return this.screenId;
+    }
+
+    // Fallback: Check for generic URL parameter (manual testing)
     if (urlParams.has('screen_id')) {
       this.screenId = urlParams.get('screen_id');
       this.log(`Screen ID from URL parameter: ${this.screenId}`);
       return this.screenId;
     }
 
-    // Fallback: Check localStorage
-    const storedScreenId = localStorage.getItem('adlocaite_screen_id');
-    if (storedScreenId) {
-      this.screenId = storedScreenId;
-      this.log(`Screen ID from localStorage: ${this.screenId}`);
-      return this.screenId;
-    }
-
-    // No screen ID available - return null
-    // Application should handle this and either enable demo mode or show error
-    this.error('No screen ID available from BroadSignObject, URL, or localStorage');
-    return null;
-  }
-
-  /**
-   * Get display unit ID from Broadsign
-   */
-  getDisplayUnitId() {
-    if (this.displayUnitId) {
-      return this.displayUnitId;
-    }
-
-    if (this.isBroadsignEnvironment()) {
-      try {
-        if (typeof BroadSignObject.getDisplayUnitId === 'function') {
-          this.displayUnitId = BroadSignObject.getDisplayUnitId();
-          this.log(`Display Unit ID: ${this.displayUnitId}`);
-          return this.displayUnitId;
-        }
-      } catch (err) {
-        this.log('getDisplayUnitId not available', err);
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Get player ID from Broadsign
-   */
-  getPlayerId() {
-    if (this.playerId) {
-      return this.playerId;
-    }
-
-    if (this.isBroadsignEnvironment()) {
-      try {
-        if (typeof BroadSignObject.getPlayerId === 'function') {
-          this.playerId = BroadSignObject.getPlayerId();
-          this.log(`Player ID: ${this.playerId}`);
-          return this.playerId;
-        }
-      } catch (err) {
-        this.log('getPlayerId not available', err);
-      }
-    }
-
+    // No screen ID available
+    this.error('No screen ID available from BroadSignObject or URL parameters');
     return null;
   }
 
@@ -210,44 +160,17 @@ class BroadsignAdapter {
   }
 
   /**
-   * Get player information for logging and debugging
-   */
-  getPlayerInfo() {
-    const info = {
-      environment: this.isBroadsignEnvironment() ? 'Broadsign Control Player' : 'Browser',
-      screenId: this.getScreenId(),
-      displayUnitId: this.getDisplayUnitId(),
-      playerId: this.getPlayerId(),
-      userAgent: navigator.userAgent,
-      screenResolution: `${window.screen.width}x${window.screen.height}`,
-      viewportSize: `${window.innerWidth}x${window.innerHeight}`,
-      timestamp: new Date().toISOString()
-    };
-
-    this.log('Player Info', info);
-    return info;
-  }
-
-  /**
    * Initialize Broadsign integration
    * Called when page loads
    */
   initialize() {
     this.log('Initializing Broadsign Adapter');
-    
-    const playerInfo = this.getPlayerInfo();
-    
-    if (!this.isBroadsignEnvironment()) {
-      this.error('Not running in Broadsign environment! Some features may not work correctly.');
-    }
 
-    // Validate screen ID
-    const screenId = this.getScreenId();
-    if (!screenId || screenId.startsWith('test-screen-')) {
-      this.error('Invalid or test screen ID. Configure proper screen identification.');
+    if (this.isBroadsignEnvironment()) {
+      this.log('BroadSignObject:', this.getBroadSignObject());
+    } else {
+      this.log('Not in Broadsign environment — checking URL parameters for frame_id');
     }
-
-    return playerInfo;
   }
 
   /**
@@ -300,15 +223,15 @@ class BroadsignAdapter {
    * Get playout tracking data for API submission
    */
   getPlayoutTrackingData() {
-    const playerInfo = this.getPlayerInfo();
+    const bsObject = this.getBroadSignObject();
     const duration = this.getPlaybackDuration();
 
     return {
       played_at: this.startTime ? new Date(this.startTime).toISOString() : new Date().toISOString(),
       duration_seconds: Math.round(duration),
-      completion_rate: 100, // Will be updated by player if interrupted
-      player_version: 'Broadsign Control Player + Adlocaite Integration v1.0.0',
-      screen_resolution: playerInfo.screenResolution
+      completion_rate: 100,
+      player_version: `Broadsign Control Player + Adlocaite Integration v${this.config.packageVersion || '2.0.0'}`,
+      screen_resolution: bsObject?.frame_resolution || `${window.innerWidth}x${window.innerHeight}`
     };
   }
 }
