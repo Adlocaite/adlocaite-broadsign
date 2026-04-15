@@ -39,9 +39,28 @@ class AdlocaiteAPIClient {
   /**
    * Make HTTP request with timeout and retry logic
    */
-  async makeRequest(url, options = {}, retryCount = 0) {
+  /**
+   * Make HTTP request with timeout and retry logic
+   *
+   * @param {string} url
+   * @param {object} options - fetch options
+   * @param {number} retryCount - current retry attempt (internal)
+   * @param {object} retryOpts - override timeout/retry behaviour per call
+   * @param {number} retryOpts.timeout - request timeout in ms
+   * @param {number} retryOpts.maxRetries - max retry attempts
+   * @param {number} retryOpts.retryDelay - delay before retry in ms
+   * @param {number} retryOpts.retryTimeout - timeout for retry attempts (defaults to retryOpts.timeout)
+   */
+  async makeRequest(url, options = {}, retryCount = 0, retryOpts = {}) {
+    const maxRetries = retryOpts.maxRetries ?? this.maxRetries;
+    const retryDelay = retryOpts.retryDelay ?? this.retryDelay;
+    // On retry attempts, use retryTimeout if provided (warm server needs less time)
+    const timeout = (retryCount > 0 && retryOpts.retryTimeout)
+      ? retryOpts.retryTimeout
+      : (retryOpts.timeout ?? this.requestTimeout);
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.requestTimeout);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
       this.log(`Making request to: ${url}`, options);
@@ -98,20 +117,23 @@ class AdlocaiteAPIClient {
       }
 
       // Retry on 5xx errors
-      if (response.status >= 500 && retryCount < this.maxRetries) {
-        const delay = this.retryDelay * Math.pow(2, retryCount);
-        this.log(`Retrying after ${delay}ms (attempt ${retryCount + 1}/${this.maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return this.makeRequest(url, options, retryCount + 1);
+      if (response.status >= 500 && retryCount < maxRetries) {
+        this.log(`Retrying after ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        return this.makeRequest(url, options, retryCount + 1, retryOpts);
       }
 
       // For other 4xx errors, log but don't throw (prevents Broadsign auto-skip)
       if (response.status >= 400 && response.status < 500) {
-        this.error(`Client error ${response.status}: ${response.statusText}`, errorData);
+        const apiMessage = (errorData.body && typeof errorData.body === 'object')
+          ? (errorData.body.error || errorData.body.message || `HTTP ${response.status}`)
+          : `HTTP ${response.status}`;
+        this.error(`API error ${response.status}: ${apiMessage}`, errorData);
         return {
           error: true,
           status: response.status,
-          message: `Client error: ${response.statusText}`,
+          message: apiMessage,
+          errorCode: errorData.body?.error_code || null,
           data: errorData
         };
       }
@@ -140,17 +162,16 @@ class AdlocaiteAPIClient {
     } catch (err) {
       clearTimeout(timeoutId);
 
+      // Retry on timeout AND network errors (single retry, no backoff)
+      if (retryCount < maxRetries && (err.name === 'AbortError' || err instanceof TypeError || err.name === 'TypeError')) {
+        this.log(`Retrying after ${err.name === 'AbortError' ? 'timeout' : 'network error'}: ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        return this.makeRequest(url, options, retryCount + 1, retryOpts);
+      }
+
       if (err.name === 'AbortError') {
         this.error('Request timeout');
         throw new Error('Request timeout');
-      }
-
-      // Retry on network errors
-      if (retryCount < this.maxRetries && err.message.includes('fetch')) {
-        const delay = this.retryDelay * Math.pow(2, retryCount);
-        this.log(`Retrying after network error: ${delay}ms (attempt ${retryCount + 1}/${this.maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return this.makeRequest(url, options, retryCount + 1);
       }
 
       this.error('Request failed', err);
@@ -171,10 +192,8 @@ class AdlocaiteAPIClient {
   async requestOffer(screenId, options = {}) {
     const params = new URLSearchParams();
     
-    const minBidCents = options.minBidCents || this.config.minBidCents;
-    if (minBidCents) {
-      params.append('min_bid_cents', minBidCents);
-    }
+    const minBidCents = options.minBidCents ?? this.config.minBidCents ?? 0;
+    params.append('min_bid_cents', minBidCents);
 
     if (options.vast !== undefined ? options.vast : this.config.vastMode) {
       params.append('vast', 'true');
@@ -185,13 +204,17 @@ class AdlocaiteAPIClient {
     }
 
     const url = `${this.baseUrl}/offers/request/${screenId}?${params.toString()}`;
-    
+
     this.log(`Requesting offer for screen: ${screenId}`);
-    
+
+    // Offer requests use aggressive timeouts to fit within PREBUFFER window
+    // Cold start scenario: 2s timeout → 250ms wait → retry succeeds
+    const offerRetryOpts = { timeout: 2000, maxRetries: 1, retryDelay: 250, retryTimeout: 1000 };
+
     try {
       const response = await this.makeRequest(url, {
         method: 'GET'
-      });
+      }, 0, offerRetryOpts);
 
       this.log('Offer received', response);
       return response;
@@ -211,10 +234,8 @@ class AdlocaiteAPIClient {
   async requestOfferByExternalId(externalId, options = {}) {
     const params = new URLSearchParams();
     
-    const minBidCents = options.minBidCents || this.config.minBidCents;
-    if (minBidCents) {
-      params.append('min_bid_cents', minBidCents);
-    }
+    const minBidCents = options.minBidCents ?? this.config.minBidCents ?? 0;
+    params.append('min_bid_cents', minBidCents);
 
     if (options.vast !== undefined ? options.vast : this.config.vastMode) {
       params.append('vast', 'true');
@@ -225,13 +246,17 @@ class AdlocaiteAPIClient {
     }
 
     const url = `${this.baseUrl}/offers/request/external-id/${externalId}?${params.toString()}`;
-    
+
     this.log(`Requesting offer for external ID: ${externalId}`);
-    
+
+    // Offer requests use aggressive timeouts to fit within PREBUFFER window
+    // Cold start scenario: 2s timeout → 250ms wait → retry succeeds
+    const offerRetryOpts = { timeout: 2000, maxRetries: 1, retryDelay: 250, retryTimeout: 1000 };
+
     try {
       const response = await this.makeRequest(url, {
         method: 'GET'
-      });
+      }, 0, offerRetryOpts);
 
       this.log('Offer received', response);
       return response;
@@ -329,70 +354,6 @@ class AdlocaiteAPIClient {
     }
   }
 
-  /**
-   * Get cacheable assets for a screen
-   * 
-   * @param {string} screenId - Screen UUID
-   * @param {object} options - Request options
-   * @param {number} options.minBidCents - Minimum bid filter
-   * @returns {Promise<object>} Cacheable assets list
-   */
-  async getCacheableAssets(screenId, options = {}) {
-    const params = new URLSearchParams();
-    
-    const minBidCents = options.minBidCents || this.config.minBidCents;
-    if (minBidCents) {
-      params.append('min_bid_cents', minBidCents);
-    }
-
-    const url = `${this.baseUrl}/screens/${screenId}/cacheable-assets?${params.toString()}`;
-    
-    this.log(`Requesting cacheable assets for screen: ${screenId}`);
-    
-    try {
-      const response = await this.makeRequest(url, {
-        method: 'GET'
-      });
-
-      this.log('Cacheable assets received', response);
-      return response;
-    } catch (err) {
-      this.error(`Failed to get cacheable assets for screen ${screenId}`, err);
-      throw err;
-    }
-  }
-
-  /**
-   * Get cacheable assets using external screen ID
-   * 
-   * @param {string} externalId - External screen identifier
-   * @param {object} options - Request options
-   * @returns {Promise<object>} Cacheable assets list
-   */
-  async getCacheableAssetsByExternalId(externalId, options = {}) {
-    const params = new URLSearchParams();
-    
-    const minBidCents = options.minBidCents || this.config.minBidCents;
-    if (minBidCents) {
-      params.append('min_bid_cents', minBidCents);
-    }
-
-    const url = `${this.baseUrl}/screens/external-id/${externalId}/cacheable-assets?${params.toString()}`;
-    
-    this.log(`Requesting cacheable assets for external ID: ${externalId}`);
-    
-    try {
-      const response = await this.makeRequest(url, {
-        method: 'GET'
-      });
-
-      this.log('Cacheable assets received', response);
-      return response;
-    } catch (err) {
-      this.error(`Failed to get cacheable assets for external ID ${externalId}`, err);
-      throw err;
-    }
-  }
 }
 
 // Make class globally available

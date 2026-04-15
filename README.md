@@ -2,36 +2,24 @@
 
 Official Broadsign Control HTML5 package for integrating programmatic DOOH (Digital Out-of-Home) advertisements via the Adlocaite API.
 
-## How It Works (V1)
+## How It Works
 
-When Broadsign plays an ad slot assigned to this package, the following happens:
+When Broadsign plays an ad slot assigned to this package:
 
-1. **Page Load** — Broadsign loads the HTML package and runs initialization (configuration, module setup)
-2. **BroadSignPlay()** — Broadsign calls `BroadSignPlay()` when the ad slot is displayed. Only at this point is `BroadSignObject.frame_id` available to identify the screen.
-3. **Content Loading** — The package requests an offer from the Adlocaite API, parses the VAST response, and loads the media asset (video or image).
-4. **Playback** — The media plays, VAST tracking events are fired, and playout is confirmed via the API.
-
-### Known Issues
-
-- **Visible loading delay** ([#3](https://github.com/Adlocaite/adlocaite-broadsign/issues/3)): Since the screen ID is only available at playout time, content must be loaded while the slot is already visible. This can cause a brief black screen or loading delay.
-- **Skip signal not effective** ([#4](https://github.com/Adlocaite/adlocaite-broadsign/issues/4)): The `<title>` skip signal is set during/after playout start, but Broadsign only checks the title within the first 1-2 seconds after page load — before `BroadSignPlay()` fires. This means Broadsign cannot skip to a waterfall fallback automatically.
-- **Fallback campaign required**: Because the skip signal doesn't work in time, publishers must configure a separate fallback campaign in Broadsign Control that plays when Adlocaite has no ad to serve. Without this, empty ad slots may show a black screen.
-
-## Roadmap: Version 2 (WIP)
-
-V2 will address the limitations above:
-
-- **Content Pre-Loading** — Load content during Broadsign's off-screen pre-buffering phase (before `BroadSignPlay()`), enabling instant playback with no visible delay.
-- **Asset Pre-Caching** — Background cache manager that periodically fetches upcoming ad assets and stores them in the browser cache, reducing load times and providing resilience against temporary network issues.
-- **Skip Signal Support** — Signal "skip" before Broadsign's check window, enabling automatic waterfall fallback without a dedicated fallback campaign.
-- **Screen ID Fallback Chain** — Fall back to `display_unit_id` or `player_id` when `frame_id` is not configured.
+1. **Pre-Loading (PREBUFFER)** — Broadsign loads the HTML package off-screen. During this phase, `BroadSignObject.frame_id` is already available. The package immediately requests an offer from the Adlocaite API, parses the VAST response, accepts the offer, and pre-loads the media asset.
+2. **Skip Signal** — If no ad is available, the package sends a `skip_next` WebSocket command to the Broadsign Remote Control API (`ws://localhost:2326`). Broadsign then moves to the next item in the programmatic waterfall.
+3. **BroadSignPlay()** — Broadsign calls `BroadSignPlay()` when the ad slot becomes visible. Pre-loaded content plays instantly with no loading delay.
+4. **Playback & Tracking** — The media plays, VAST tracking events are fired at the correct quartiles, and playout is confirmed via the API.
 
 ## Requirements
 
 - Broadsign Control 15.4+ (Chromium 87+)
+- **Remote Control enabled** in Broadsign Control Player settings (required for WebSocket skip signaling)
 - Adlocaite Publisher API Key
-- Registered screens with `external_id` matching the Broadsign screen identifier (typically `frame_id`)
+- Registered screens in Adlocaite with `external_id` matching the Broadsign `frame_id`
 - A fallback campaign in Broadsign for when no programmatic ad is available
+
+> **Important:** The WebSocket skip mechanism requires Broadsign's Remote Control API to be enabled on the player. Without it, there is **no reliable skip mechanism** and the player may show black screens when no ad is available. See [Broadsign Remote Control documentation](https://docs.broadsign.com/broadsign-control/latest/en/skip-next-command-action.html) for setup instructions.
 
 ## Installation
 
@@ -63,18 +51,46 @@ Edit `package/js/config.js`:
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `apiKey` | Publisher API key (required) | - |
-| `apiBaseUrl` | API endpoint (staging/production) | Staging |
-| `vastMode` | Enable VAST XML | `true` |
-| `debugMode` | Enable detailed logging | `false` |
+| `apiKey` | Publisher API key (required, format: `pub_xxxx`) | — |
+| `apiBaseUrl` | API endpoint (staging/production) | Production |
+| `minBidCents` | Minimum bid price in cents | `100` |
+| `vastMode` | Enable VAST XML responses | `true` |
+| `debugMode` | Enable detailed console logging and debug panel | `false` |
+| `axiomToken` | Axiom ingest-only API token for remote error logging (optional) | `''` |
+| `axiomDataset` | Axiom dataset name | `'broadsign'` |
+| `packageVersion` | Version string (auto-injected by build) | `'2.0.0'` |
 
 ## Screen Registration
 
-Screens must be registered in Adlocaite with an `external_id` matching the Broadsign screen identifier. In most setups this is the `frame_id`, but it can also be the `display_unit_id` depending on your Broadsign configuration.
+Screens must be registered in Adlocaite with an `external_id` matching the Broadsign `frame_id`. The `frame_id` represents an individual screen surface (a display unit can have multiple frames, e.g., front/back of a totem).
 
-Check your Broadsign Player debug logs to see which ID is being used, and set the matching `external_id` in the Adlocaite dashboard.
+1. Find your Broadsign `frame_id` in the Broadsign Control interface or player debug logs
+2. Create or update the screen in the Adlocaite dashboard with a matching `external_id`
+3. Example: Broadsign `frame_id` = `"842292831"` → Adlocaite `external_id` = `"842292831"`
 
 See: [docs.adlocaite.com](https://docs.adlocaite.com)
+
+## Skip Signal & Waterfall
+
+The package uses WebSocket commands to Broadsign's Remote Control API at `ws://localhost:2326` to signal skip. This is the **only** reliable skip mechanism — Remote Control must be enabled on the player.
+
+- Sends `skip_next` during PREBUFFER to prevent the ad copy from being shown
+- Fast fail (2s timeout + 1 retry) ensures the skip fires within the PREBUFFER window
+
+**Skip reasons:**
+- `no offers available` — API returned no offers (404)
+- `api error` — API returned an error
+- `no screen id` — No screen ID available
+- `init failed` — Initialization failed
+- `preload failed` — Pre-loading failed
+
+Publishers must always configure a fallback campaign in Broadsign Control. Without Remote Control enabled, there is no reliable skip mechanism.
+
+## Remote Logging (Axiom)
+
+When `axiomToken` is configured, the package sends error and warning events to Axiom for production monitoring. Events are buffered and flushed periodically (every 10s) or immediately on errors. Without a token, logging is console-only.
+
+Each event includes: timestamp, log level, module name, message, screen ID, package version, and user agent.
 
 ## Testing
 
@@ -83,35 +99,36 @@ npm run test:serve
 # Open http://127.0.0.1:8000/test/
 ```
 
+The test server at `test/server.js` provides a PREBUFFER simulation endpoint (`/package-sim`) that injects a mock `BroadSignObject` with configurable properties, allowing local testing without a Broadsign Player.
+
 ## Troubleshooting
 
 **No screen ID available**
-- Must run in Broadsign Player
-- Verify `frame_id` is set by Broadsign
+- Must run inside Broadsign Player
+- Verify `frame_id` is set in Broadsign
 
-**404 - No offers available**
+**404 — No offers available**
 - Check screen is registered with matching `external_id`
 - Verify campaign is active in Adlocaite
 
-**401 - Invalid API key**
+**401 — Invalid API key**
 - Check API key in `config.js`
 - Verify key format starts with `pub_`
 
 **CORS errors**
 - Asset servers require `Access-Control-Allow-Origin: *` header
 
-**Black screen / no ad playing**
+**Skip not working / black screen**
+- Ensure **Remote Control is enabled** in Broadsign Control Player settings
 - Ensure a fallback campaign is configured in Broadsign Control
-- Check debug logs for API errors
+- Check debug logs (`debugMode: true`) for API errors
 
-Enable debug logging for details:
+Enable debug logging for detailed diagnostics:
 ```javascript
 debugMode: true
 ```
 
 ## Contributing
-
-We welcome contributions! Here's how to get started:
 
 ### Development Workflow
 
@@ -167,6 +184,7 @@ npm run test:serve
 - **Documentation**: [docs.adlocaite.com](https://docs.adlocaite.com)
 - **Website**: [adlocaite.com](https://adlocaite.com)
 - **Broadsign Docs**: [docs.broadsign.com](https://docs.broadsign.com/broadsign-control/latest/html5.html)
+- **Broadsign Skip Next Command**: [docs.broadsign.com](https://docs.broadsign.com/broadsign-control/latest/en/skip-next-command-action.html)
 
 ## Not a Publisher Yet?
 

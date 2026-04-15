@@ -233,6 +233,8 @@ class VASTParser {
     const extensions = {
       dealId: null,
       offerId: null,
+      bidPriceCents: null,
+      expiresAt: null,
       billingId: null,
       campaignId: null,
       adlocaiteData: {}
@@ -273,6 +275,18 @@ class VASTParser {
         const campaignIdElement = element.querySelector('CampaignId, campaign_id, [data-campaign-id]');
         if (campaignIdElement) {
           extensions.campaignId = campaignIdElement.textContent.trim() || campaignIdElement.getAttribute('data-campaign-id');
+        }
+
+        // Look for bid_price_cents
+        const bidPriceElement = element.querySelector('BidPriceCents, bid_price_cents');
+        if (bidPriceElement) {
+          extensions.bidPriceCents = parseInt(bidPriceElement.textContent.trim()) || null;
+        }
+
+        // Look for expires_at
+        const expiresAtElement = element.querySelector('ExpiresAt, expires_at');
+        if (expiresAtElement) {
+          extensions.expiresAt = expiresAtElement.textContent.trim() || null;
         }
 
         // Store entire extension content
@@ -343,9 +357,33 @@ class VASTParser {
 
   /**
    * Get deal ID for playout confirmation
+   * Note: The backend VAST contains OfferId, not DealId.
+   * The deal_id is returned by the accept-offer API call.
    */
   getDealId() {
     return this.parsedData?.customExtensions?.dealId || null;
+  }
+
+  /**
+   * Get offer ID from VAST extensions
+   * The Adlocaite backend puts OfferId in the Extensions block.
+   */
+  getOfferId() {
+    return this.parsedData?.customExtensions?.offerId || null;
+  }
+
+  /**
+   * Get bid price in cents from VAST extensions
+   */
+  getBidPriceCents() {
+    return this.parsedData?.customExtensions?.bidPriceCents || null;
+  }
+
+  /**
+   * Get offer expiry from VAST extensions
+   */
+  getExpiresAt() {
+    return this.parsedData?.customExtensions?.expiresAt || null;
   }
 
   /**

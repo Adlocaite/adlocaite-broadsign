@@ -7,78 +7,71 @@
   <link rel="icon" href="/test/favicon.ico" type="image/x-icon">
   <style>
     :root {
-      --brutalist-bg-primary: rgb(255, 255, 255);
-      --brutalist-bg-secondary: rgb(0, 0, 0);
-      --brutalist-bg-muted: rgba(0, 0, 0, 0.05);
-      --brutalist-text-primary: rgb(0, 0, 0);
-      --brutalist-text-secondary: rgb(255, 255, 255);
-      --brutalist-text-muted: rgba(0, 0, 0, 0.6);
-      --brutalist-text-disabled: rgba(0, 0, 0, 0.4);
-      --brutalist-border-primary: rgb(212, 212, 212);
-      --brutalist-error-bg: rgb(254, 242, 242);
-      --brutalist-error-text: rgb(127, 29, 29);
-      --brutalist-warning-bg: rgb(255, 247, 237);
-      --brutalist-warning-text: rgb(124, 45, 18);
-      --brutalist-success-bg: rgb(240, 253, 244);
-      --brutalist-success-text: rgb(20, 83, 45);
-      --brutalist-accent-text: rgb(22, 78, 99);
+      --bg-primary: #fff;
+      --bg-secondary: #000;
+      --bg-muted: rgba(0,0,0,.05);
+      --text-primary: #000;
+      --text-secondary: #fff;
+      --text-muted: rgba(0,0,0,.6);
+      --text-disabled: rgba(0,0,0,.4);
+      --border: #d4d4d4;
+      --error-bg: #fef2f2; --error-text: #7f1d1d;
+      --warn-bg: #fff7ed;  --warn-text: #7c2d12;
+      --ok-bg: #f0fdf4;    --ok-text: #14532d;
+      --accent: #164e63;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--brutalist-bg-primary);
-      color: var(--brutalist-text-primary);
+      background: var(--bg-primary);
+      color: var(--text-primary);
       height: 100vh;
       display: flex;
       flex-direction: column;
     }
 
+    /* ── Header ─────────────────────────────────────────────── */
     header {
-      background: var(--brutalist-bg-secondary);
-      color: var(--brutalist-text-secondary);
-      padding: 16px 24px;
-      border-bottom: 3px solid var(--brutalist-text-primary);
-    }
-
-    h1 {
-      font-size: 20px;
-      font-weight: 900;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
-    .container {
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      padding: 12px 24px;
+      border-bottom: 3px solid var(--text-primary);
       display: flex;
-      flex: 1;
-      overflow: hidden;
+      align-items: center;
+      gap: 16px;
     }
+    header h1 { font-size: 16px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+    header .version { font-size: 12px; opacity: .5; font-weight: 400; }
+
+    /* ── Layout ──────────────────────────────────────────────── */
+    .container { display: flex; flex: 1; overflow: hidden; }
 
     .sidebar {
       width: 320px;
-      background: var(--brutalist-bg-muted);
-      border-right: 3px solid var(--brutalist-border-primary);
-      padding: 24px;
+      background: var(--bg-muted);
+      border-right: 3px solid var(--border);
+      padding: 20px;
       overflow-y: auto;
     }
 
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
+    .main { flex: 1; display: flex; flex-direction: column; }
 
+    /* ── Toolbar ─────────────────────────────────────────────── */
     .toolbar {
-      background: var(--brutalist-bg-muted);
-      padding: 16px 24px;
-      border-bottom: 3px solid var(--brutalist-border-primary);
+      background: var(--bg-muted);
+      padding: 12px 24px;
+      border-bottom: 3px solid var(--border);
       display: flex;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
       flex-wrap: wrap;
     }
 
+    .toolbar-right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+
+    /* ── Content ──────────────────────────────────────────────── */
     .content {
       flex: 1;
       position: relative;
@@ -92,195 +85,156 @@
     .content-wrapper {
       position: relative;
       background: #fff;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 12px rgba(0,0,0,.1);
     }
 
-    .logs {
-      height: 240px;
-      background: var(--brutalist-bg-secondary);
-      color: var(--brutalist-text-secondary);
-      border-top: 3px solid var(--brutalist-text-primary);
-      overflow-y: auto;
-      padding: 16px;
-      font-family: 'Courier New', monospace;
-      font-size: 13px;
-    }
-
-    button {
-      background: var(--brutalist-bg-secondary);
-      color: var(--brutalist-text-secondary);
-      border: 3px solid var(--brutalist-text-primary);
-      padding: 10px 20px;
-      cursor: pointer;
-      font-family: inherit;
-      font-size: 14px;
-      font-weight: 900;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      transition: all 0.1s ease;
-    }
-
-    button:hover:not(:disabled) {
-      background: var(--brutalist-text-primary);
-      color: var(--brutalist-text-secondary);
-      transform: translate(-2px, -2px);
-      box-shadow: 4px 4px 0 var(--brutalist-text-primary);
-    }
-
-    button:active:not(:disabled) {
-      transform: translate(0, 0);
-      box-shadow: none;
-    }
-
-    button:disabled {
-      background: var(--brutalist-bg-muted);
-      color: var(--brutalist-text-disabled);
-      border-color: rgba(0, 0, 0, 0.2);
-      cursor: not-allowed;
-    }
-
-    button.danger {
-      background: #dc2626;
-      color: white;
-      border-color: #7f1d1d;
-    }
-
-    button.danger:hover:not(:disabled) {
-      background: #b91c1c;
-      box-shadow: 4px 4px 0 #7f1d1d;
-    }
-
-    .config-section {
-      margin-bottom: 24px;
-      padding-bottom: 24px;
-      border-bottom: 2px solid var(--brutalist-border-primary);
-    }
-
-    .config-section:last-child { border-bottom: none; }
-
-    .config-section h3 {
-      font-size: 14px;
-      font-weight: 900;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      margin-bottom: 16px;
-    }
-
-    .config-field {
-      margin-bottom: 12px;
-    }
-
-    .config-field label {
-      display: block;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--brutalist-text-muted);
-      margin-bottom: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .config-field input[type="text"],
-    .config-field input[type="password"],
-    .config-field input[type="number"] {
-      width: 100%;
-      background: var(--brutalist-bg-primary);
-      border: 2px solid var(--brutalist-border-primary);
-      color: var(--brutalist-text-primary);
-      padding: 8px 12px;
-      font-family: 'Courier New', monospace;
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .config-field input:focus {
-      outline: none;
-      border-color: var(--brutalist-text-primary);
-      box-shadow: 0 0 0 3px var(--brutalist-bg-muted);
-    }
-
-    .config-field input[type="checkbox"] {
-      margin-right: 8px;
-      width: 18px;
-      height: 18px;
-    }
-
-    .config-field label.checkbox {
-      display: flex;
-      align-items: center;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 600;
-      text-transform: none;
-    }
-
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-
-    .log-entry {
-      padding: 4px 0;
-      border-left: 3px solid transparent;
-      padding-left: 12px;
-      margin: 2px 0;
-    }
-
-    .log-entry.info { border-left-color: var(--brutalist-accent-text); }
-    .log-entry.success { border-left-color: #16a34a; }
-    .log-entry.error { border-left-color: #dc2626; }
-    .log-entry.warning { border-left-color: #ea580c; }
-
-    .status {
-      display: inline-block;
-      padding: 6px 12px;
-      font-size: 12px;
-      font-weight: 900;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      border: 2px solid currentColor;
-    }
-
-    .status.ready {
-      background: var(--brutalist-success-bg);
-      color: var(--brutalist-success-text);
-    }
-
-    .status.running {
-      background: var(--brutalist-warning-bg);
-      color: var(--brutalist-warning-text);
-    }
-
-    .status.error {
-      background: var(--brutalist-error-bg);
-      color: var(--brutalist-error-text);
-    }
+    iframe { width: 100%; height: 100%; border: none; }
 
     .placeholder {
       padding: 40px;
       text-align: center;
-      color: var(--brutalist-text-muted);
+      color: var(--text-muted);
       font-size: 14px;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: .05em;
     }
+
+    /* ── Logs ────────────────────────────────────────────────── */
+    .logs {
+      height: 220px;
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      border-top: 3px solid var(--text-primary);
+      overflow-y: auto;
+      padding: 12px 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+
+    .log-entry {
+      padding: 3px 0;
+      border-left: 3px solid transparent;
+      padding-left: 10px;
+      margin: 1px 0;
+    }
+    .log-entry.info    { border-left-color: var(--accent); }
+    .log-entry.success { border-left-color: #16a34a; }
+    .log-entry.error   { border-left-color: #dc2626; }
+    .log-entry.warning { border-left-color: #ea580c; }
+    .log-entry .ts     { color: #6b7280; }
+
+    /* ── Buttons ─────────────────────────────────────────────── */
+    button {
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      border: 3px solid var(--text-primary);
+      padding: 8px 16px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      transition: all .1s ease;
+    }
+    button:hover:not(:disabled) {
+      transform: translate(-2px,-2px);
+      box-shadow: 4px 4px 0 var(--text-primary);
+    }
+    button:active:not(:disabled) { transform: translate(0,0); box-shadow: none; }
+    button:disabled {
+      background: var(--bg-muted); color: var(--text-disabled);
+      border-color: rgba(0,0,0,.2); cursor: not-allowed;
+    }
+    button.danger { background: #dc2626; color: white; border-color: #7f1d1d; }
+    button.danger:hover:not(:disabled) { background: #b91c1c; box-shadow: 4px 4px 0 #7f1d1d; }
+
+    /* ── Config sidebar ──────────────────────────────────────── */
+    .config-section {
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid var(--border);
+    }
+    .config-section:last-child { border-bottom: none; }
+    .config-section h3 {
+      font-size: 12px; font-weight: 900; letter-spacing: .05em;
+      text-transform: uppercase; margin-bottom: 12px;
+    }
+    .config-field { margin-bottom: 10px; }
+    .config-field label {
+      display: block; font-size: 11px; font-weight: 700;
+      color: var(--text-muted); margin-bottom: 4px;
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    .config-field input[type="text"],
+    .config-field input[type="password"],
+    .config-field input[type="number"],
+    .config-field select {
+      width: 100%;
+      background: var(--bg-primary);
+      border: 2px solid var(--border);
+      color: var(--text-primary);
+      padding: 6px 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .config-field input:focus, .config-field select:focus {
+      outline: none; border-color: var(--text-primary);
+    }
+    .config-field input[type="checkbox"] { margin-right: 8px; width: 16px; height: 16px; }
+    .config-field label.checkbox {
+      display: flex; align-items: center; cursor: pointer;
+      font-size: 12px; font-weight: 600; text-transform: none;
+    }
+
+    /* ── Status badges ───────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      border: 2px solid currentColor;
+      white-space: nowrap;
+    }
+    .badge.idle    { background: #e5e7eb; color: #374151; }
+    .badge.prebuf  { background: #dbeafe; color: #1e40af; }
+    .badge.ready   { background: var(--ok-bg); color: var(--ok-text); }
+    .badge.playing { background: var(--warn-bg); color: var(--warn-text); }
+    .badge.done    { background: var(--ok-bg); color: var(--ok-text); }
+    .badge.skip    { background: var(--error-bg); color: var(--error-text); }
+    .badge.error   { background: var(--error-bg); color: var(--error-text); }
+
+    /* ── Collapsible ─────────────────────────────────────────── */
+    .collapsible-toggle {
+      cursor: pointer; user-select: none;
+    }
+    .collapsible-toggle::before {
+      content: '\25B6'; display: inline-block; margin-right: 6px;
+      font-size: 10px; transition: transform .2s;
+    }
+    .collapsible-toggle.open::before { transform: rotate(90deg); }
+    .collapsible-body { display: none; }
+    .collapsible-body.open { display: block; }
+
+    /* ── Timing bar ──────────────────────────────────────────── */
+    .timing { font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-muted); }
   </style>
 </head>
 <body>
   <header>
-    <h1>🧪 Broadsign Integration Test</h1>
+    <h1>Broadsign Integration Test</h1>
+    <span class="version">V2 Simulator</span>
   </header>
 
   <div class="container">
+    <!-- ── Sidebar ─────────────────────────────────────────── -->
     <div class="sidebar">
       <div class="config-section">
-        <h3>Configuration</h3>
-        <div class="config-field">
-          <label>frame_id:</label>
-          <input type="text" id="frameId" value="" placeholder="your-frame-id">
-        </div>
+        <h3>Adlocaite Config</h3>
         <div class="config-field">
           <label>API Key:</label>
           <input type="password" id="apiKey" value="" placeholder="pub_xxxx">
@@ -292,18 +246,10 @@
             <option value="https://api.adlocaite.com/functions/v1/api">Production</option>
           </select>
         </div>
-      </div>
-
-      <div class="config-section">
-        <h3>Display</h3>
         <div class="config-field">
-          <label>Resolution (width×height):</label>
-          <input type="text" id="resolution" value="1920x1080" placeholder="1920x1080">
+          <label>Min Bid (cents):</label>
+          <input type="number" id="minBid" value="0" min="0">
         </div>
-      </div>
-
-      <div class="config-section">
-        <h3>Options</h3>
         <div class="config-field">
           <label class="checkbox">
             <input type="checkbox" id="vastMode" checked>
@@ -316,26 +262,72 @@
             Debug Mode
           </label>
         </div>
+      </div>
+
+      <div class="config-section">
+        <h3>Broadsign Simulation</h3>
         <div class="config-field">
-          <label>Min Bid (cents):</label>
-          <input type="number" id="minBid" value="1" min="0">
+          <label>frame_id (Screen):</label>
+          <input type="text" id="frameId" value="" placeholder="72510413">
+        </div>
+        <div class="config-field">
+          <label>frame_resolution:</label>
+          <input type="text" id="frameResolution" value="1920x1080" placeholder="1920x1080">
+        </div>
+
+        <!-- Advanced BroadSignObject properties -->
+        <h3 class="collapsible-toggle" onclick="toggleCollapsible(this)" style="margin-top: 16px; cursor: pointer;">
+          Advanced Properties
+        </h3>
+        <div class="collapsible-body">
+          <div class="config-field">
+            <label>display_unit_id:</label>
+            <input type="text" id="displayUnitId" value="56006755" placeholder="56006755">
+          </div>
+          <div class="config-field">
+            <label>player_id:</label>
+            <input type="text" id="playerId" value="71846385" placeholder="71846385">
+          </div>
+          <div class="config-field">
+            <label>display_unit_address:</label>
+            <input type="text" id="displayUnitAddress" value="Berlin" placeholder="Berlin">
+          </div>
+          <div class="config-field">
+            <label>display_unit_lat_long:</label>
+            <input type="text" id="displayUnitLatLong" value="52.520007,13.404954">
+          </div>
+          <div class="config-field">
+            <label>display_unit_resolution:</label>
+            <input type="text" id="displayUnitResolution" value="1920x1080">
+          </div>
+          <div class="config-field">
+            <label>expected_slot_duration_ms:</label>
+            <input type="text" id="expectedSlotDuration" value="10000" disabled>
+          </div>
+          <div class="config-field">
+            <label>dwell_time_duration_ms:</label>
+            <input type="text" id="dwellTimeDuration" value="60000">
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- ── Main ────────────────────────────────────────────── -->
     <div class="main">
       <div class="toolbar">
-        <button onclick="loadPackage()" id="loadBtn">▶ Load Package</button>
-        <button onclick="triggerPlay()" id="playBtn" disabled>🎬 Trigger Play</button>
-        <button onclick="clearLogs()" class="danger">🗑 Clear</button>
-        <span class="status ready" id="status">Ready</span>
-        <span class="status" id="titleStatus" style="margin-left: auto; background: #e5e7eb; color: #374151;">Title: —</span>
+        <button onclick="loadPackage()" id="loadBtn">Load Package</button>
+        <button onclick="triggerPlay()" id="playBtn" disabled>BroadSignPlay()</button>
+        <button onclick="resetAll()" class="danger">Reset</button>
+
+        <div class="toolbar-right">
+          <span class="timing" id="timingDisplay"></span>
+          <span class="badge idle" id="lifecycle">IDLE</span>
+          <span class="badge idle" id="titleBadge">title: --</span>
+        </div>
       </div>
 
       <div class="content" id="contentArea">
-        <div class="placeholder">
-          Click "Load Package" to begin
-        </div>
+        <div class="placeholder">Click "Load Package" to simulate PREBUFFER</div>
       </div>
 
       <div class="logs" id="logs"></div>
@@ -343,389 +335,407 @@
   </div>
 
   <script>
+    // ═══════════════════════════════════════════════════════════
+    //  State
+    // ═══════════════════════════════════════════════════════════
     let packageWindow = null;
     let titleMonitorInterval = null;
     let lastTitle = null;
+    let loadStartTime = null;   // when iframe starts loading (PREBUFFER)
+    let readyTime = null;       // when title becomes "ready"
+    let playTriggerTime = null; // when BroadSignPlay() is called
 
-    // ===== URL Parameter & LocalStorage Handling =====
+    // ═══════════════════════════════════════════════════════════
+    //  LocalStorage persistence
+    // ═══════════════════════════════════════════════════════════
+    const STORAGE_KEY = 'adlocaite_test_config_v2';
 
-    const STORAGE_KEY = 'adlocaite_test_config';
-
-    /**
-     * Parse URL parameters
-     * Supports: ?api_key=xxx&frame_id=yyy&resolution=1920x1080&debug=true&env=staging
-     */
-    function getUrlParams() {
-      const params = new URLSearchParams(window.location.search);
-      return {
-        apiKey: params.get('api_key') || params.get('apiKey'),
-        frameId: params.get('frame_id') || params.get('frameId'),
-        resolution: params.get('resolution'),
-        vastMode: params.get('vast') || params.get('vastMode'),
-        debugMode: params.get('debug') || params.get('debugMode'),
-        minBid: params.get('min_bid') || params.get('minBid'),
-        environment: params.get('env') || params.get('environment')
-      };
-    }
-
-    /**
-     * Load config from localStorage
-     */
     function loadFromStorage() {
       try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        return stored ? JSON.parse(stored) : {};
-      } catch (e) {
-        console.error('Failed to load from localStorage:', e);
-        return {};
-      }
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      } catch { return {}; }
     }
 
-    /**
-     * Save config to localStorage
-     */
     function saveToStorage() {
       try {
-        const config = {
-          apiKey: document.getElementById('apiKey').value,
-          frameId: document.getElementById('frameId').value,
-          resolution: document.getElementById('resolution').value,
-          vastMode: document.getElementById('vastMode').checked,
-          debugMode: document.getElementById('debugMode').checked,
-          minBid: document.getElementById('minBid').value,
-          apiEnvironment: document.getElementById('apiEnvironment').value
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-      } catch (e) {
-        console.error('Failed to save to localStorage:', e);
-      }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          apiKey: $('apiKey').value,
+          frameId: $('frameId').value,
+          frameResolution: $('frameResolution').value,
+          apiEnvironment: $('apiEnvironment').value,
+          vastMode: $('vastMode').checked,
+          debugMode: $('debugMode').checked,
+          minBid: $('minBid').value,
+          displayUnitId: $('displayUnitId').value,
+          playerId: $('playerId').value,
+          displayUnitAddress: $('displayUnitAddress').value,
+          displayUnitLatLong: $('displayUnitLatLong').value,
+          displayUnitResolution: $('displayUnitResolution').value,
+          dwellTimeDuration: $('dwellTimeDuration').value,
+        }));
+      } catch {}
     }
 
-    /**
-     * Initialize form with values from URL params or localStorage
-     * Priority: URL params > localStorage > Defaults
-     */
     function initializeForm() {
-      const urlParams = getUrlParams();
+      const urlParams = new URLSearchParams(window.location.search);
       const stored = loadFromStorage();
 
-      // API Key
-      const apiKey = urlParams.apiKey || stored.apiKey || '';
-      if (apiKey) {
-        document.getElementById('apiKey').value = apiKey;
-        log('API Key loaded from ' + (urlParams.apiKey ? 'URL params' : 'localStorage'), 'info');
+      // Priority: URL params > localStorage > defaults
+      setVal('apiKey',      urlParams.get('api_key')   || stored.apiKey || '');
+      setVal('frameId',     urlParams.get('frame_id')  || stored.frameId || '');
+      setVal('minBid',      urlParams.get('min_bid')   || stored.minBid || '0');
+      setVal('frameResolution', urlParams.get('resolution') || stored.frameResolution || '1920x1080');
+
+      // Select
+      const env = urlParams.get('env');
+      if (env === 'production' || env === 'prod') {
+        $('apiEnvironment').value = 'https://api.adlocaite.com/functions/v1/api';
+      } else if (stored.apiEnvironment) {
+        $('apiEnvironment').value = stored.apiEnvironment;
       }
 
-      // Frame ID
-      const frameId = urlParams.frameId || stored.frameId || '';
-      if (frameId) {
-        document.getElementById('frameId').value = frameId;
-        log('Frame ID loaded: ' + frameId + ' (from ' + (urlParams.frameId ? 'URL params' : 'localStorage') + ')', 'info');
-      }
+      // Checkboxes
+      $('vastMode').checked = urlParams.has('vast') ? urlParams.get('vast') !== 'false' : (stored.vastMode !== undefined ? stored.vastMode : true);
+      $('debugMode').checked = urlParams.has('debug') ? urlParams.get('debug') !== 'false' : (stored.debugMode !== undefined ? stored.debugMode : true);
 
-      // Resolution
-      const resolution = urlParams.resolution || stored.resolution || '1920x1080';
-      document.getElementById('resolution').value = resolution;
+      // Advanced
+      setVal('displayUnitId',        stored.displayUnitId || '56006755');
+      setVal('playerId',             stored.playerId || '71846385');
+      setVal('displayUnitAddress',   stored.displayUnitAddress || 'Berlin');
+      setVal('displayUnitLatLong',   stored.displayUnitLatLong || '52.520007,13.404954');
+      setVal('displayUnitResolution', stored.displayUnitResolution || '1920x1080');
+      setVal('dwellTimeDuration',    stored.dwellTimeDuration || '60000');
 
-      // VAST Mode (convert string 'true'/'false' to boolean)
-      const vastMode = urlParams.vastMode !== null ? (urlParams.vastMode === 'true' || urlParams.vastMode === '1') :
-                      (stored.vastMode !== undefined ? stored.vastMode : true);
-      document.getElementById('vastMode').checked = vastMode;
-
-      // Debug Mode
-      const debugMode = urlParams.debugMode !== null ? (urlParams.debugMode === 'true' || urlParams.debugMode === '1') :
-                       (stored.debugMode !== undefined ? stored.debugMode : true);
-      document.getElementById('debugMode').checked = debugMode;
-
-      // Min Bid
-      const minBid = urlParams.minBid || stored.minBid || '1';
-      document.getElementById('minBid').value = minBid;
-
-      // API Environment
-      let apiEnvironment = stored.apiEnvironment || 'https://staging.api.adlocaite.com/functions/v1/api';
-      if (urlParams.environment === 'staging') {
-        apiEnvironment = 'https://staging.api.adlocaite.com/functions/v1/api';
-      } else if (urlParams.environment === 'production' || urlParams.environment === 'prod') {
-        apiEnvironment = 'https://api.adlocaite.com/functions/v1/api';
-      } else if (urlParams.environment && urlParams.environment.startsWith('http')) {
-        apiEnvironment = urlParams.environment;
-      }
-      document.getElementById('apiEnvironment').value = apiEnvironment;
-
-      // Show info if URL params were used
-      if (urlParams.apiKey || urlParams.frameId) {
-        log('🔗 Config loaded from URL parameters', 'success');
+      if (urlParams.get('api_key') || urlParams.get('frame_id')) {
+        log('Config loaded from URL parameters', 'success');
       } else if (stored.apiKey || stored.frameId) {
-        log('💾 Config restored from localStorage', 'success');
+        log('Config restored from localStorage', 'info');
       }
     }
 
-    /**
-     * Setup auto-save on input changes
-     */
     function setupAutoSave() {
-      const inputs = ['apiKey', 'frameId', 'resolution', 'vastMode', 'debugMode', 'minBid', 'apiEnvironment'];
-      inputs.forEach(id => {
-        const element = document.getElementById(id);
-        if (element) {
-          element.addEventListener('change', saveToStorage);
-          element.addEventListener('input', saveToStorage);
-        }
+      document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
+        el.addEventListener('change', saveToStorage);
+        el.addEventListener('input', saveToStorage);
       });
     }
 
-    function updateTitleDisplay(title) {
-      const titleStatus = document.getElementById('titleStatus');
-      titleStatus.textContent = `Title: ${title}`;
-
-      // Color coding based on title value
-      if (title === 'ready') {
-        titleStatus.style.background = 'var(--brutalist-success-bg)';
-        titleStatus.style.color = 'var(--brutalist-success-text)';
-      } else if (title === 'wait') {
-        titleStatus.style.background = 'var(--brutalist-warning-bg)';
-        titleStatus.style.color = 'var(--brutalist-warning-text)';
-      } else if (title.startsWith('skip')) {
-        titleStatus.style.background = 'var(--brutalist-error-bg)';
-        titleStatus.style.color = 'var(--brutalist-error-text)';
-      } else {
-        titleStatus.style.background = '#e5e7eb';
-        titleStatus.style.color = '#374151';
-      }
+    // ═══════════════════════════════════════════════════════════
+    //  Lifecycle
+    // ═══════════════════════════════════════════════════════════
+    function setLifecycle(phase) {
+      const el = $('lifecycle');
+      el.textContent = phase;
+      el.className = 'badge ' + ({
+        'IDLE': 'idle', 'PREBUFFER': 'prebuf', 'READY': 'ready',
+        'PLAYING': 'playing', 'COMPLETE': 'done', 'SKIP': 'skip', 'ERROR': 'error'
+      }[phase] || 'idle');
     }
 
-    function startTitleMonitor() {
-      // Clear any existing interval
-      if (titleMonitorInterval) {
-        clearInterval(titleMonitorInterval);
+    function updateTiming() {
+      if (!loadStartTime) return;
+      const now = performance.now();
+      const parts = [];
+
+      if (readyTime) {
+        parts.push(`preload: ${((readyTime - loadStartTime) / 1000).toFixed(2)}s`);
+      } else {
+        parts.push(`loading: ${((now - loadStartTime) / 1000).toFixed(1)}s`);
       }
 
-      // Poll the iframe title every 200ms
+      if (playTriggerTime && readyTime) {
+        parts.push(`idle: ${((playTriggerTime - readyTime) / 1000).toFixed(2)}s`);
+      }
+
+      $('timingDisplay').textContent = parts.join(' | ');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Title monitoring
+    // ═══════════════════════════════════════════════════════════
+    function startTitleMonitor() {
+      if (titleMonitorInterval) clearInterval(titleMonitorInterval);
+
       titleMonitorInterval = setInterval(() => {
         try {
-          const iframe = document.getElementById('packageFrame');
-          if (iframe && iframe.contentDocument) {
-            const title = iframe.contentDocument.title;
-            if (title !== lastTitle) {
-              lastTitle = title;
-              updateTitleDisplay(title);
-              log(`📋 Title changed: "${title}"`, title.startsWith('skip') ? 'error' : (title === 'ready' ? 'success' : 'info'));
+          const iframe = $('packageFrame');
+          if (!iframe || !iframe.contentDocument) return;
+          const title = iframe.contentDocument.title;
+          if (title === lastTitle) return;
+
+          lastTitle = title;
+          const elapsed = loadStartTime ? ((performance.now() - loadStartTime) / 1000).toFixed(2) : '?';
+          const badge = $('titleBadge');
+          badge.textContent = `title: ${title}`;
+
+          if (title === 'ready') {
+            badge.className = 'badge ready';
+            if (!readyTime) {
+              readyTime = performance.now();
+              setLifecycle('READY');
+              updateTiming();
             }
+            log(`Title -> "${title}" (T+${elapsed}s)`, 'success');
+          } else if (title === 'wait') {
+            badge.className = 'badge prebuf';
+            log(`Title -> "${title}" (T+${elapsed}s)`, 'info');
+          } else if (title.startsWith('skip')) {
+            badge.className = 'badge skip';
+            setLifecycle('SKIP');
+            log(`Title -> "${title}" (T+${elapsed}s)`, 'error');
+          } else {
+            badge.className = 'badge idle';
           }
-        } catch (e) {
-          // Cross-origin or other access error
-        }
-      }, 200);
+        } catch {}
+      }, 100);
     }
 
-    function setupBroadSignObject() {
-      const [width, height] = document.getElementById('resolution').value.split('x');
-      window.BroadSignObject = {
-        frame_id: document.getElementById('frameId').value,
-        display_unit_id: "test-display-unit",
-        player_id: "test-player",
-        frame_resolution: `${width}x${height}`,
-        display_unit_resolution: `${width}x${height}`,
-        campaign_id: "test-campaign-001",
-        impressions_per_hour: 100,
-        expected_slot_duration_ms: 15000,
-        dwell_time_duration_ms: 15000,
-        requestFocus: function() {
-          log('BroadSignObject.requestFocus() called', 'info');
-        }
-      };
-      log('BroadSignObject initialized: frame_id=' + window.BroadSignObject.frame_id, 'success');
-    }
-
-    function log(message, type = 'info') {
-      const timestamp = new Date().toTimeString().split(' ')[0];
-      const logs = document.getElementById('logs');
-      const entry = document.createElement('div');
-      entry.className = `log-entry ${type}`;
-      entry.textContent = `[${timestamp}] ${message}`;
-      logs.appendChild(entry);
-      logs.scrollTop = logs.scrollHeight;
-      console.log(`[${timestamp}] ${message}`);
-    }
-
-    function setStatus(text, className) {
-      const status = document.getElementById('status');
-      status.textContent = text;
-      status.className = `status ${className}`;
-    }
-
-    function clearLogs() {
-      document.getElementById('logs').innerHTML = '';
-      log('Logs cleared', 'info');
-    }
-
-    function updateContentSize() {
-      const [width, height] = document.getElementById('resolution').value.split('x');
-      const wrapper = document.querySelector('.content-wrapper');
-      if (wrapper) {
-        const containerWidth = document.getElementById('contentArea').clientWidth - 40;
-        const containerHeight = document.getElementById('contentArea').clientHeight - 40;
-        const scale = Math.min(containerWidth / parseInt(width), containerHeight / parseInt(height), 1);
-
-        wrapper.style.width = width + 'px';
-        wrapper.style.height = height + 'px';
-        wrapper.style.transform = `scale(${scale})`;
-      }
-    }
-
+    // ═══════════════════════════════════════════════════════════
+    //  Core: Load Package (PREBUFFER simulation)
+    // ═══════════════════════════════════════════════════════════
     function loadPackage() {
-      log('=== Loading Package ===', 'success');
+      // Validate
+      const frameId = $('frameId').value.trim();
+      const apiKey = $('apiKey').value.trim();
+      if (!frameId) { log('ERROR: frame_id is required', 'error'); return; }
+      if (!apiKey)  { log('ERROR: API key is required', 'error'); return; }
 
-      // Reset title monitor
+      // Reset state
       lastTitle = null;
-      updateTitleDisplay('—');
+      readyTime = null;
+      playTriggerTime = null;
+      loadStartTime = performance.now();
+      $('titleBadge').textContent = 'title: --';
+      $('titleBadge').className = 'badge idle';
+      $('timingDisplay').textContent = '';
 
-      setupBroadSignObject();
+      log('=== PREBUFFER Phase ===', 'success');
+      setLifecycle('PREBUFFER');
 
-      // Update config.js with API key
-      const apiKey = document.getElementById('apiKey').value;
-      const vastMode = document.getElementById('vastMode').checked;
-      const debugMode = document.getElementById('debugMode').checked;
-      const minBid = document.getElementById('minBid').value;
-      const apiBaseUrl = document.getElementById('apiEnvironment').value;
-
-      const envName = apiBaseUrl.includes('staging') ? 'Staging' : 'Production';
-      log('Config: ' + envName + ', API Key set, VAST=' + vastMode + ', Debug=' + debugMode, 'info');
-
-      // Store config in parent window so iframe can access it immediately
+      // Store config override for the package (accessed via parent.ADLOCAITE_TEST_CONFIG)
       window.ADLOCAITE_TEST_CONFIG = {
-        apiKey,
-        apiBaseUrl,
-        vastMode,
-        debugMode,
-        minBidCents: parseInt(minBid)
+        apiKey: apiKey,
+        apiBaseUrl: $('apiEnvironment').value,
+        vastMode: $('vastMode').checked,
+        debugMode: $('debugMode').checked,
+        minBidCents: parseInt($('minBid').value) || 0,
       };
-      log('Config stored in parent window for early access', 'info');
 
-      const packageUrl = '../package/index.html';
+      // Build /package-sim URL with all BroadSignObject properties
+      const [frameW, frameH] = $('frameResolution').value.split('x');
+      const simParams = new URLSearchParams({
+        frame_id:                   frameId,
+        display_unit_id:            $('displayUnitId').value,
+        player_id:                  $('playerId').value,
+        display_unit_address:       $('displayUnitAddress').value,
+        display_unit_lat_long:      $('displayUnitLatLong').value,
+        display_unit_location_code: '',
+        display_unit_resolution:    $('displayUnitResolution').value,
+        frame_resolution:           $('frameResolution').value,
+        expected_slot_duration_ms:  '10000',
+        dwell_time_duration_ms:     $('dwellTimeDuration').value,
+        impressions_per_hour:       '0.000000',
+        expected_impressions:       '0.000000',
+        campaign_id:                'test-campaign-001',
+        ad_copy_id:                 'test-adcopy-001',
+      });
 
-      const [width, height] = document.getElementById('resolution').value.split('x');
-      log(`Resolution: ${width}×${height}`, 'info');
+      const packageUrl = `/package-sim?${simParams.toString()}`;
 
-      const contentArea = document.getElementById('contentArea');
+      log(`BroadSignObject.frame_id = ${frameId}`, 'info');
+      log(`Loading package via /package-sim (BroadSignObject injected before scripts)`, 'info');
+
+      // Create iframe
+      const contentArea = $('contentArea');
       const wrapper = document.createElement('div');
       wrapper.className = 'content-wrapper';
-      wrapper.style.width = width + 'px';
-      wrapper.style.height = height + 'px';
+      wrapper.style.width = (frameW || 1920) + 'px';
+      wrapper.style.height = (frameH || 1080) + 'px';
 
       const iframe = document.createElement('iframe');
-      iframe.src = packageUrl;
       iframe.id = 'packageFrame';
+      iframe.src = packageUrl;
 
-      iframe.onload = function() {
+      iframe.onload = () => {
         packageWindow = iframe.contentWindow;
-        log('Package loaded successfully', 'success');
+        log('Package HTML loaded', 'success');
 
-        // Intercept iframe console.log to show in test interface
-        if (packageWindow) {
-          const originalLog = packageWindow.console.log;
-          const originalError = packageWindow.console.error;
+        // Intercept iframe console for our log panel
+        interceptConsole(packageWindow);
 
-          packageWindow.console.log = function(...args) {
-            originalLog.apply(packageWindow.console, args);
-            const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
-            // Highlight important events
-            if (message.includes('pre-loaded') || message.includes('Pre-load complete') || message.includes('Playing pre-loaded')) {
-              log('📦 ' + message, 'success');
-            } else if (message.includes('BroadSignPlay')) {
-              log('🎬 ' + message, 'info');
-            }
-          };
+        // Start title monitor
+        startTitleMonitor();
 
-          packageWindow.console.error = function(...args) {
-            originalError.apply(packageWindow.console, args);
-            const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
-            log('❌ ' + message, 'error');
-          };
-        }
+        // Start timing display update
+        const timingInterval = setInterval(() => {
+          updateTiming();
+          // Stop updating once we have all timing data
+          if (readyTime && playTriggerTime) clearInterval(timingInterval);
+        }, 200);
 
-        if (packageWindow) {
-          // Inject BroadSignObject
-          packageWindow.BroadSignObject = window.BroadSignObject;
-
-          // Update config if accessible
-          if (packageWindow.ADLOCAITE_CONFIG) {
-            packageWindow.ADLOCAITE_CONFIG.apiKey = apiKey;
-            packageWindow.ADLOCAITE_CONFIG.apiBaseUrl = apiBaseUrl;
-            packageWindow.ADLOCAITE_CONFIG.vastMode = vastMode;
-            packageWindow.ADLOCAITE_CONFIG.debugMode = debugMode;
-            packageWindow.ADLOCAITE_CONFIG.minBidCents = parseInt(minBid);
-            log('Config injected into package', 'success');
-          }
-
-          // Start title monitoring
-          startTitleMonitor();
-
-          // Update debug panel visibility (since initialize() already ran)
-          const debugPanel = packageWindow.document.getElementById('debug-panel');
-          if (debugPanel) {
-            debugPanel.style.display = debugMode ? 'block' : 'none';
-            log('Debug panel: ' + (debugMode ? 'shown' : 'hidden'), 'info');
-          }
-
-          log('BroadSignObject injected', 'success');
-        }
-
+        // Update iframe size
         updateContentSize();
-        setStatus('Loaded', 'ready');
-        document.getElementById('playBtn').disabled = false;
-        log('Ready to trigger BroadSignPlay()', 'info');
+
+        // Enable Play button
+        $('playBtn').disabled = false;
+        log('Ready -- click "BroadSignPlay()" to simulate ad slot display', 'info');
       };
 
-      iframe.onerror = function() {
+      iframe.onerror = () => {
         log('ERROR: Failed to load package', 'error');
-        setStatus('Error', 'error');
+        setLifecycle('ERROR');
       };
 
       wrapper.appendChild(iframe);
       contentArea.innerHTML = '';
       contentArea.appendChild(wrapper);
 
-      setStatus('Loading...', 'running');
-      document.getElementById('loadBtn').disabled = true;
+      $('loadBtn').disabled = true;
+      saveToStorage();
     }
 
+    // ═══════════════════════════════════════════════════════════
+    //  Core: Trigger BroadSignPlay()
+    // ═══════════════════════════════════════════════════════════
     function triggerPlay() {
-      log('=== Triggering BroadSignPlay() ===', 'success');
-      setStatus('Playing...', 'running');
-
-      const iframe = document.getElementById('packageFrame');
+      const iframe = $('packageFrame');
       if (!iframe || !iframe.contentWindow) {
         log('ERROR: Package not loaded', 'error');
         return;
       }
 
+      log('=== BroadSignPlay() triggered ===', 'success');
+      playTriggerTime = performance.now();
+      setLifecycle('PLAYING');
+      updateTiming();
+
       try {
         if (typeof iframe.contentWindow.BroadSignPlay === 'function') {
           iframe.contentWindow.BroadSignPlay();
-          log('BroadSignPlay() executed', 'success');
+          log('BroadSignPlay() called successfully', 'success');
         } else {
-          log('ERROR: BroadSignPlay() not found', 'error');
-          setStatus('Error', 'error');
+          log('ERROR: BroadSignPlay() not defined in package', 'error');
+          setLifecycle('ERROR');
         }
       } catch (err) {
         log('ERROR: ' + err.message, 'error');
-        setStatus('Error', 'error');
+        setLifecycle('ERROR');
       }
+
+      $('playBtn').disabled = true;
     }
 
-    // Initialize on page load
+    // ═══════════════════════════════════════════════════════════
+    //  Reset
+    // ═══════════════════════════════════════════════════════════
+    function resetAll() {
+      if (titleMonitorInterval) clearInterval(titleMonitorInterval);
+      packageWindow = null;
+      lastTitle = null;
+      loadStartTime = null;
+      readyTime = null;
+      playTriggerTime = null;
+
+      $('contentArea').innerHTML = '<div class="placeholder">Click "Load Package" to simulate PREBUFFER</div>';
+      $('logs').innerHTML = '';
+      $('loadBtn').disabled = false;
+      $('playBtn').disabled = true;
+      $('timingDisplay').textContent = '';
+      setLifecycle('IDLE');
+      $('titleBadge').textContent = 'title: --';
+      $('titleBadge').className = 'badge idle';
+      log('Reset complete', 'info');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Console interception
+    // ═══════════════════════════════════════════════════════════
+    function interceptConsole(win) {
+      if (!win) return;
+      const origLog = win.console.log;
+      const origErr = win.console.error;
+      const origWarn = win.console.warn;
+
+      win.console.log = function(...args) {
+        origLog.apply(win.console, args);
+        const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+
+        // Detect lifecycle events from log messages
+        if (msg.includes('Pre-load complete') || msg.includes('pre-loaded successfully')) {
+          log(msg, 'success');
+        } else if (msg.includes('BroadSignPlay')) {
+          log(msg, 'info');
+        } else if (msg.includes('Playback completed') || msg.includes('Playout confirmed')) {
+          log(msg, 'success');
+          setLifecycle('COMPLETE');
+        } else if (msg.includes('Firing tracking event')) {
+          log(msg, 'info');
+        } else {
+          // Only show [Adlocaite], [Broadsign], [VAST], [Cache] prefixed messages
+          if (msg.match(/^\[.*\]/)) log(msg, 'info');
+        }
+      };
+
+      win.console.error = function(...args) {
+        origErr.apply(win.console, args);
+        const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+        log(msg, 'error');
+      };
+
+      win.console.warn = function(...args) {
+        origWarn.apply(win.console, args);
+        const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+        log(msg, 'warning');
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Helpers
+    // ═══════════════════════════════════════════════════════════
+    function $(id) { return document.getElementById(id); }
+    function setVal(id, val) { const el = $(id); if (el) el.value = val; }
+
+    function log(message, type = 'info') {
+      const ts = new Date().toTimeString().split(' ')[0];
+      const logs = $('logs');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.innerHTML = `<span class="ts">[${ts}]</span> ${escapeHtml(message)}`;
+      logs.appendChild(entry);
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function toggleCollapsible(toggle) {
+      toggle.classList.toggle('open');
+      const body = toggle.nextElementSibling;
+      if (body) body.classList.toggle('open');
+    }
+
+    function updateContentSize() {
+      const [width, height] = $('frameResolution').value.split('x');
+      const wrapper = document.querySelector('.content-wrapper');
+      if (!wrapper) return;
+      const area = $('contentArea');
+      const maxW = area.clientWidth - 40;
+      const maxH = area.clientHeight - 40;
+      const scale = Math.min(maxW / parseInt(width), maxH / parseInt(height), 1);
+      wrapper.style.transform = `scale(${scale})`;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Init
+    // ═══════════════════════════════════════════════════════════
     window.addEventListener('DOMContentLoaded', () => {
       initializeForm();
       setupAutoSave();
-      log('Test suite ready', 'info');
-
-      const urlParams = getUrlParams();
-      if (urlParams.apiKey || urlParams.frameId) {
-        log('💡 TIP: Bookmark this URL to keep your config!', 'success');
-      } else {
-        log('💡 TIP: Add ?api_key=xxx&frame_id=yyy to URL for quick testing', 'info');
-      }
+      log('Test simulator ready (V2)', 'info');
+      log('TIP: ?api_key=xxx&frame_id=yyy in URL for quick config', 'info');
     });
 
     window.addEventListener('resize', updateContentSize);

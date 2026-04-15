@@ -11,6 +11,27 @@ permissions:
   pull-requests: write
 
 jobs:
+  branch-policy:
+    name: Branch Policy
+    if: github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce source branch
+        run: |
+          HEAD_REF="${{ github.head_ref }}"
+          echo "PR source branch: $HEAD_REF"
+          echo "PR target branch: main"
+
+          if [ "$HEAD_REF" != "dev" ]; then
+            echo "::error::PRs to main must come from dev branch. Got: $HEAD_REF"
+            echo ""
+            echo "Follow the correct Git flow: feature/* → dev → main"
+            echo "Direct feature branch PRs to main are not allowed."
+            exit 1
+          fi
+
+          echo "Source branch is dev — OK"
+
   deploy-token-check:
     name: Deploy Token Check
     if: github.base_ref == 'main'

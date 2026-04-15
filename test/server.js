@@ -39,6 +39,15 @@ const server = http.createServer((req, res) => {
   if (requestPath === '/') requestPath = '/test/index.html';
   else if (requestPath.endsWith('/')) requestPath += 'index.html';
 
+  // ── /package-sim ──────────────────────────────────────────────
+  // Serves package/index.html with BroadSignObject injected BEFORE
+  // any scripts run. This simulates the real Broadsign Control Player
+  // where BroadSignObject properties are available during PREBUFFER.
+  if (requestPath === '/package-sim') {
+    servePackageSim(req, res, projectRoot);
+    return;
+  }
+
   let filePath = path.join(projectRoot, requestPath);
 
   // Security: prevent directory traversal
@@ -100,6 +109,79 @@ function serveFile(filePath, res) {
     });
     res.end(content);
   });
+}
+
+/**
+ * Serve package/index.html with BroadSignObject injected before scripts.
+ *
+ * Simulates the real Broadsign Control Player environment:
+ * - BroadSignObject is a global with all properties as STRINGS
+ * - Available during PREBUFFER state (before BroadSignPlay)
+ * - URL also contains com.broadsign.suite.bsp.* params (like real source URL)
+ *
+ * Query params → BroadSignObject properties (all strings):
+ *   frame_id, display_unit_id, player_id, ad_copy_id, campaign_id,
+ *   display_unit_address, display_unit_lat_long, display_unit_location_code,
+ *   display_unit_resolution, frame_resolution, expected_slot_duration_ms,
+ *   dwell_time_duration_ms, impressions_per_hour, expected_impressions
+ */
+function servePackageSim(req, res, projectRoot) {
+  const fullUrl = new URL(req.url, `http://${HOST}:${PORT}`);
+  const params = fullUrl.searchParams;
+
+  // Read the real package HTML
+  const packagePath = path.join(projectRoot, 'package', 'index.html');
+  let html;
+  try {
+    html = fs.readFileSync(packagePath, 'utf8');
+  } catch (err) {
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end('Failed to read package/index.html: ' + err.message);
+    return;
+  }
+
+  // Build BroadSignObject from query params (all values are strings, like real Broadsign)
+  const bsObject = {
+    frame_id:                    params.get('frame_id') || '',
+    display_unit_id:             params.get('display_unit_id') || '',
+    player_id:                   params.get('player_id') || '',
+    ad_copy_id:                  params.get('ad_copy_id') || '',
+    campaign_id:                 params.get('campaign_id') || '',
+    display_unit_address:        params.get('display_unit_address') || '',
+    display_unit_lat_long:       params.get('display_unit_lat_long') || '',
+    display_unit_location_code:  params.get('display_unit_location_code') || '',
+    display_unit_resolution:     params.get('display_unit_resolution') || '1920x1080',
+    frame_resolution:            params.get('frame_resolution') || '1920x1080',
+    expected_slot_duration_ms:   params.get('expected_slot_duration_ms') || '10000',
+    dwell_time_duration_ms:      params.get('dwell_time_duration_ms') || '60000',
+    impressions_per_hour:        params.get('impressions_per_hour') || '0.000000',
+    expected_impressions:        params.get('expected_impressions') || '0.000000',
+  };
+
+  // Injection: base href so relative script paths resolve to /package/,
+  // plus BroadSignObject as a global BEFORE any package scripts run.
+  const injection = `
+  <base href="/package/">
+  <script>
+    // ── BroadSignObject (simulated by test server) ──────────────
+    // In the real Broadsign Control Player, this global is available
+    // during PREBUFFER state, before BroadSignPlay() fires.
+    window.BroadSignObject = ${JSON.stringify(bsObject)};
+    window.BroadSignObject.requestFocus = function() {
+      console.log('[BroadSignObject] requestFocus() called');
+    };
+    window.__BROADSIGN_SIM_INJECTED_AT = performance.now();
+  </script>`;
+
+  // Inject right after <head> so it runs before config.js and all other scripts
+  const modifiedHtml = html.replace(/<head>/i, '<head>' + injection);
+
+  res.writeHead(200, {
+    'Content-Type': 'text/html',
+    'Cache-Control': 'no-cache',
+    'Access-Control-Allow-Origin': '*'
+  });
+  res.end(modifiedHtml);
 }
 
 server.listen(PORT, HOST, () => {
