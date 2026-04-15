@@ -55,11 +55,7 @@ Edit `package/js/config.js`:
 | `apiBaseUrl` | API endpoint (staging/production) | Production |
 | `minBidCents` | Minimum bid price in cents | `100` |
 | `vastMode` | Enable VAST XML responses | `true` |
-| `debugMode` | Enable detailed console logging | `false` |
-| `requestTimeout` | API request timeout in ms | `10000` |
-| `assetTimeout` | Media asset loading timeout in ms | `20000` |
-| `maxRetries` | Number of API retry attempts | `3` |
-| `retryDelay` | Initial retry delay in ms (exponential backoff) | `1000` |
+| `debugMode` | Enable detailed console logging and debug panel | `false` |
 | `axiomToken` | Axiom ingest-only API token for remote error logging (optional) | `''` |
 | `axiomDataset` | Axiom dataset name | `'broadsign'` |
 | `packageVersion` | Version string (auto-injected by build) | `'2.0.0'` |

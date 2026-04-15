@@ -115,18 +115,18 @@ class AdlocaitePlayer {
         cleanup();
         this.error('Video pre-load timeout');
         reject(new Error('Video pre-load timeout'));
-      }, this.config.assetTimeout);
+      }, this.config.assetTimeout || 15000);
 
       const cleanup = () => {
         clearTimeout(loadTimeout);
-        this.preloadedVideoElement.removeEventListener('canplaythrough', onCanPlayThrough);
+        this.preloadedVideoElement.removeEventListener('canplay', onCanPlay);
         this.preloadedVideoElement.removeEventListener('error', onError);
       };
 
-      const onCanPlayThrough = () => {
+      const onCanPlay = () => {
         cleanup();
         this.duration = this.preloadedVideoElement.duration;
-        this.log(`Video pre-loaded. Duration: ${this.duration}s, buffered and ready`);
+        this.log(`Video pre-loaded. Duration: ${this.duration}s, ready to play (streaming)`);
         resolve();
       };
 
@@ -139,7 +139,7 @@ class AdlocaitePlayer {
         reject(new Error(`Video pre-load error: ${videoError?.message || 'unknown'}`));
       };
 
-      this.preloadedVideoElement.addEventListener('canplaythrough', onCanPlayThrough);
+      this.preloadedVideoElement.addEventListener('canplay', onCanPlay);
       this.preloadedVideoElement.addEventListener('error', onError);
 
       this.preloadedVideoElement.src = mediaFile.url;
@@ -163,7 +163,7 @@ class AdlocaitePlayer {
         cleanup();
         this.error('Image pre-load timeout');
         reject(new Error('Image pre-load timeout'));
-      }, this.config.assetTimeout);
+      }, this.config.assetTimeout || 15000);
 
       const cleanup = () => {
         clearTimeout(loadTimeout);
@@ -251,7 +251,8 @@ class AdlocaitePlayer {
       }, { once: true });
 
       this.videoElement.addEventListener('error', () => {
-        const videoError = this.videoElement.error;
+        // Use local ref — this.videoElement may be null after cleanup
+        const videoError = this.videoElement?.error;
         this.error('Video playback error', {
           code: videoError?.code, message: videoError?.message
         });
@@ -403,15 +404,20 @@ class AdlocaitePlayer {
     this.broadsignAdapter.endPlayback();
 
     if (this.videoElement) {
+      // Remove error listener before clearing src (setting src='' fires an error event)
+      this.videoElement.onerror = null;
       this.videoElement.pause();
-      this.videoElement.src = '';
+      this.videoElement.removeAttribute('src');
+      this.videoElement.load();
       this.videoElement.remove();
       this.videoElement = null;
     }
 
     if (this.preloadedVideoElement && this.preloadedVideoElement !== this.videoElement) {
+      this.preloadedVideoElement.onerror = null;
       this.preloadedVideoElement.pause();
-      this.preloadedVideoElement.src = '';
+      this.preloadedVideoElement.removeAttribute('src');
+      this.preloadedVideoElement.load();
       this.preloadedVideoElement.remove();
     }
     this.preloadedVideoElement = null;

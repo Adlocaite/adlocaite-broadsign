@@ -10,12 +10,7 @@
 </head>
 <body>
   <!-- Main player container -->
-  <div id="adlocaite-container" class="adlocaite-container">
-    <div class="loading-screen">
-      <div class="loading-spinner"></div>
-      <div class="loading-text">Loading Adlocaite...</div>
-    </div>
-  </div>
+  <div id="adlocaite-container" class="adlocaite-container"></div>
 
   <!-- Debug panel (only visible in debug mode) -->
   <div id="debug-panel" class="debug-panel" style="display: none;">
@@ -287,30 +282,25 @@
             bidPriceCents = bidPriceCents ?? offerData.bid_price_cents;
           }
 
-          // Accept offer to get deal_id
-          if (offerId) {
-            this.log('Pre-load: Accepting offer: ' + offerId);
-            try {
-              const acceptResponse = await this.apiClient.acceptOffer(offerId, bidPriceCents);
-              dealId = acceptResponse?.deal_id;
-              this.log('Pre-load: Deal ID: ' + dealId);
-            } catch (err) {
-              this.logger.warn('Adlocaite', 'Failed to accept offer, continuing without deal_id', {
-                offerId, error: err.message
-              });
-            }
-          }
-
           // Get best media file
           const mediaFile = this.vastParser.getBestMediaFile();
           if (!mediaFile) {
             throw new Error('No suitable media file found in VAST');
           }
 
-          // Pre-load media asset
-          this.log('Pre-load: Loading media: ' + mediaFile.url);
-          await this.player.preloadMedia(mediaFile);
-          this.log('Pre-load: Media ready');
+          // Accept offer + pre-load media in parallel
+          // Video download starts immediately while accept call runs
+          this.log('Pre-load: Starting accept + media download in parallel');
+          const acceptPromise = offerId
+            ? this.apiClient.acceptOffer(offerId, bidPriceCents)
+                .then(res => { dealId = res?.deal_id; this.log('Pre-load: Deal ID: ' + dealId); })
+                .catch(err => { this.logger.warn('Adlocaite', 'Failed to accept offer, continuing without deal_id', { offerId, error: err.message }); })
+            : Promise.resolve();
+
+          const mediaPromise = this.player.preloadMedia(mediaFile)
+            .then(() => { this.log('Pre-load: Media ready'); });
+
+          await Promise.all([acceptPromise, mediaPromise]);
 
           // Swap spinner for media element while still off-screen (PREBUFFER)
           this.player.showPreloadedMedia();

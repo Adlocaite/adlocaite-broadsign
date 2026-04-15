@@ -39,34 +39,10 @@ const ADLOCAITE_CONFIG = {
 
   /**
    * Debug mode
-   * When enabled, logs detailed information to console
-   * Disable in production for better performance
+   * When enabled, logs detailed information to console and shows debug panel
+   * Disable in production
    */
   debugMode: false,
-
-  /**
-   * Request timeout in milliseconds
-   * How long to wait for API responses before giving up
-   */
-  requestTimeout: 10000,
-
-  /**
-   * Asset loading timeout in milliseconds
-   * How long to wait for media assets to load
-   */
-  assetTimeout: 20000,
-
-  /**
-   * Retry configuration
-   * Number of times to retry failed API requests
-   */
-  maxRetries: 3,
-
-  /**
-   * Retry delay in milliseconds
-   * Initial delay before first retry (exponential backoff applied)
-   */
-  retryDelay: 1000,
 
   /**
    * Axiom logging - ingest-only API token
