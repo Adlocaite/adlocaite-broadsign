@@ -76,7 +76,7 @@ package/
 - Main orchestrator that coordinates all modules
 - Handles initialization flow and `BroadSignPlay()` lifecycle
 - Manages overall application state
-- Centralized `setPlaybackStatus()` method that atomically: sends WebSocket skip/stop command, logs to Axiom, and updates UI
+- Centralized `setPlaybackStatus()` method that atomically: sends WebSocket skip command, logs to Axiom, and updates UI
 - Global error handlers (`window.onerror`, `unhandledrejection`) catch uncaught errors and trigger skip
 
 **BroadsignAdapter** (broadsign-adapter.js):
@@ -234,9 +234,9 @@ The package uses WebSocket commands to Broadsign's Remote Control API (`ws://loc
 
 **Important:** The `document.title` skip mechanism (setting title to "skip") is **not a real Broadsign feature** and does not work. WebSocket is the only reliable skip mechanism. Remote Control must be enabled on the player.
 
-**Two commands depending on timing:**
+**Command:**
 - **`skip_next`**: Sent during PREBUFFER (before `BroadSignPlay()`) — skips the ad copy before it becomes visible
-- **`stop`**: Sent after `BroadSignPlay()` has fired — stops the currently visible content and moves to next item
+- Fast fail (2s timeout + 1 retry) ensures the skip fires within the PREBUFFER window
 
 **When Skip is Signaled:**
 - `no offers available` - API returned 404 (no offers)
@@ -349,7 +349,7 @@ Expected log sequence:
 1. **Pre-Loading during PREBUFFER** — Content is loaded off-screen before `BroadSignPlay()`, eliminating visible loading delay
 2. **WebSocket Skip Signal** — `skip_next` command via Broadsign Remote Control API (`ws://localhost:2326`) for immediate, reliable skipping. Requires Remote Control to be enabled.
 3. **Axiom Remote Logging** — Centralized error/warning logging to Axiom for production monitoring (optional, graceful degradation without token)
-4. **Centralized Skip Handler** — `setPlaybackStatus()` atomically handles WebSocket skip/stop + Axiom logging + UI update
+4. **Centralized Skip Handler** — `setPlaybackStatus()` atomically handles WebSocket skip + Axiom logging + UI update
 5. **Global Error Handlers** — `window.onerror` and `unhandledrejection` catch uncaught errors and trigger skip
 6. **Removed CacheManager** — `cache-manager.js` removed; pre-loading replaces the need for background caching
 7. **Removed unnecessary getters** — `getDisplayUnitId()` and `getPlayerId()` removed; `getPlayerInfo()` reads BroadSignObject properties directly

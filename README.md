@@ -7,7 +7,7 @@ Official Broadsign Control HTML5 package for integrating programmatic DOOH (Digi
 When Broadsign plays an ad slot assigned to this package:
 
 1. **Pre-Loading (PREBUFFER)** — Broadsign loads the HTML package off-screen. During this phase, `BroadSignObject.frame_id` is already available. The package immediately requests an offer from the Adlocaite API, parses the VAST response, accepts the offer, and pre-loads the media asset.
-2. **Skip Signal** — If no ad is available, the package sends a `skip_next` WebSocket command to the Broadsign Remote Control API (`ws://localhost:2326`). Broadsign then moves to the next item in the programmatic waterfall. If `BroadSignPlay()` has already fired, a `stop` command is sent instead to end the current playback.
+2. **Skip Signal** — If no ad is available, the package sends a `skip_next` WebSocket command to the Broadsign Remote Control API (`ws://localhost:2326`). Broadsign then moves to the next item in the programmatic waterfall.
 3. **BroadSignPlay()** — Broadsign calls `BroadSignPlay()` when the ad slot becomes visible. Pre-loaded content plays instantly with no loading delay.
 4. **Playback & Tracking** — The media plays, VAST tracking events are fired at the correct quartiles, and playout is confirmed via the API.
 
@@ -74,8 +74,8 @@ See: [docs.adlocaite.com](https://docs.adlocaite.com)
 
 The package uses WebSocket commands to Broadsign's Remote Control API at `ws://localhost:2326` to signal skip. This is the **only** reliable skip mechanism — Remote Control must be enabled on the player.
 
-- **During PREBUFFER** (before `BroadSignPlay()`): sends `skip_next` to prevent the ad copy from being shown
-- **After `BroadSignPlay()`** (already visible): sends `stop` to end the current playback immediately
+- Sends `skip_next` during PREBUFFER to prevent the ad copy from being shown
+- Fast fail (2s timeout + 1 retry) ensures the skip fires within the PREBUFFER window
 
 **Skip reasons:**
 - `no offers available` — API returned no offers (404)
