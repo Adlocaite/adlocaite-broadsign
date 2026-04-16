@@ -24,9 +24,9 @@ const ADLOCAITE_CONFIG = {
   apiBaseUrl: 'https://api.adlocaite.com/functions/v1/api',
 
   /**
-   * Minimum bid price in cents
+   * Minimum bid price in cents (supports sub-cent decimals)
    * Only offers with bids >= this value will be accepted
-   * Example: 100 = €1.00 minimum bid
+   * Examples: 100 = 1.00 EUR, 0.5 = 0.005 EUR
    */
   minBidCents: 100,
 

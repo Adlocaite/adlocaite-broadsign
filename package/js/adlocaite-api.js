@@ -184,7 +184,7 @@ class AdlocaiteAPIClient {
    * 
    * @param {string} screenId - Screen UUID or external ID
    * @param {object} options - Request options
-   * @param {number} options.minBidCents - Minimum bid in cents
+   * @param {number} options.minBidCents - Minimum bid in cents (supports sub-cent decimals)
    * @param {boolean} options.vast - Request VAST XML format
    * @param {boolean} options.demo - Demo mode
    * @returns {Promise<object|string>} Offer data (JSON) or VAST XML (string)
@@ -272,7 +272,7 @@ class AdlocaiteAPIClient {
    * @param {string} offerId - Offer ID
    * @param {object} responseData - Response data
    * @param {string} responseData.action - 'accept' or 'reject'
-   * @param {number} responseData.accepted_price_cents - Price if accepting
+   * @param {number} responseData.accepted_price_cents - Price if accepting (supports sub-cent decimals)
    * @param {string} responseData.rejection_reason - Reason if rejecting
    * @returns {Promise<object>} Response confirmation
    */
@@ -299,7 +299,7 @@ class AdlocaiteAPIClient {
    * Accept an offer (convenience method)
    * 
    * @param {string} offerId - Offer ID
-   * @param {number} acceptedPriceCents - Accepted price in cents
+   * @param {number} acceptedPriceCents - Accepted price in cents (supports sub-cent decimals)
    * @returns {Promise<object>} Response with deal_id
    */
   async acceptOffer(offerId, acceptedPriceCents) {
