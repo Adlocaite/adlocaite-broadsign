@@ -275,7 +275,6 @@
           // Get offer ID from VAST Extensions or JSON response
           let offerId = this.vastParser.getOfferId();
           let bidPriceCents = this.vastParser.getBidPriceCents();
-          let dealId = null;
 
           if (!offerId && offerData) {
             offerId = offerData.offer_id;
@@ -291,16 +290,47 @@
           // Accept offer + pre-load media in parallel
           // Video download starts immediately while accept call runs
           this.log('Pre-load: Starting accept + media download in parallel');
+
+          // Strict accept: capture full result so we can verify deal_id post-await.
+          // Without a deal_id the offer was not commercially closed -- we must skip
+          // rather than serve inventory for free.
+          let acceptResult;
           const acceptPromise = offerId
             ? this.apiClient.acceptOffer(offerId, bidPriceCents)
-                .then(res => { dealId = res?.deal_id; this.log('Pre-load: Deal ID: ' + dealId); })
-                .catch(err => { this.logger.warn('Adlocaite', 'Failed to accept offer, continuing without deal_id', { offerId, error: err.message }); })
-            : Promise.resolve();
+                .then(res => { acceptResult = { ok: !res?.error, response: res }; })
+                .catch(err => { acceptResult = { ok: false, thrown: true, message: err.message }; })
+            : Promise.resolve().then(() => { acceptResult = { ok: false, missingOfferId: true }; });
 
           const mediaPromise = this.player.preloadMedia(mediaFile)
             .then(() => { this.log('Pre-load: Media ready'); });
 
           await Promise.all([acceptPromise, mediaPromise]);
+
+          const dealId = acceptResult.ok ? acceptResult.response?.deal_id : null;
+
+          if (!dealId) {
+            const errorCode = acceptResult.response?.errorCode || null;
+            const status = acceptResult.response?.status || null;
+            const reason = acceptResult.missingOfferId
+              ? 'no offer_id in VAST or response'
+              : acceptResult.thrown
+                ? `accept threw: ${acceptResult.message}`
+                : `accept ${status || ''} ${errorCode || acceptResult.response?.message || 'no deal_id'}`.trim();
+
+            this.logger.warn('Adlocaite', 'Accept did not produce a deal_id - skipping', {
+              offerId,
+              status,
+              errorCode,
+              bidPriceCents,
+              reason
+            });
+
+            this.preloadedContent = { error: true, message: reason };
+            this.setPlaybackStatus('skip', 'accept failed: ' + (errorCode || status || reason));
+            return this.preloadedContent;
+          }
+
+          this.log('Pre-load: Deal ID: ' + dealId);
 
           // Swap spinner for media element while still off-screen (PREBUFFER)
           this.player.showPreloadedMedia();
