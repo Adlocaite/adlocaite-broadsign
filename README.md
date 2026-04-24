@@ -7,9 +7,9 @@ Official Broadsign Control HTML5 package for integrating programmatic DOOH (Digi
 When Broadsign plays an ad slot assigned to this package:
 
 1. **Pre-Loading (PREBUFFER)** — Broadsign loads the HTML package off-screen. During this phase, `BroadSignObject.frame_id` is already available. The package immediately requests an offer from the Adlocaite API, parses the VAST response, accepts the offer, and pre-loads the media asset.
-2. **Skip Signal** — If no ad is available, the package sends a `skip_next` WebSocket command to the Broadsign Remote Control API (`ws://localhost:2326`). Broadsign then moves to the next item in the programmatic waterfall.
+2. **Skip Signal** — If no ad is available, or if the offer cannot be cleanly accepted (no `deal_id`), the package sends a `skip_next` WebSocket command to the Broadsign Remote Control API (`ws://localhost:2326`). Broadsign then moves to the next item in the programmatic waterfall.
 3. **BroadSignPlay()** — Broadsign calls `BroadSignPlay()` when the ad slot becomes visible. Pre-loaded content plays instantly with no loading delay.
-4. **Playback & Tracking** — The media plays, VAST tracking events are fired at the correct quartiles, and playout is confirmed via the API.
+4. **Playback & Tracking** — The media plays and VAST tracking pixels (impression, start, quartiles, complete) are fired directly from the VAST XML. These pixels are the playout signal — there is no separate confirm endpoint.
 
 ## Requirements
 
@@ -80,6 +80,7 @@ The package uses WebSocket commands to Broadsign's Remote Control API at `ws://l
 **Skip reasons:**
 - `no offers available` — API returned no offers (404)
 - `api error` — API returned an error
+- `accept failed` — Offer accept did not produce a `deal_id` (e.g. expired, already consumed, price mismatch)
 - `no screen id` — No screen ID available
 - `init failed` — Initialization failed
 - `preload failed` — Pre-loading failed

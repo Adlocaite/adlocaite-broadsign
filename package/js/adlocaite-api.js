@@ -323,37 +323,6 @@ class AdlocaiteAPIClient {
     });
   }
 
-  /**
-   * Confirm playout of an ad
-   * 
-   * @param {string} dealId - Deal ID from accepted offer
-   * @param {object} playoutData - Optional playout tracking data
-   * @param {string} playoutData.played_at - ISO 8601 timestamp
-   * @param {number} playoutData.duration_seconds - Actual duration
-   * @param {number} playoutData.completion_rate - Completion percentage (0-100)
-   * @param {string} playoutData.player_version - Player version
-   * @param {string} playoutData.screen_resolution - Screen resolution
-   * @returns {Promise<object>} Playout confirmation
-   */
-  async confirmPlayout(dealId, playoutData = {}) {
-    const url = `${this.baseUrl}/playout/confirm/${dealId}`;
-    
-    this.log(`Confirming playout for deal: ${dealId}`, playoutData);
-    
-    try {
-      const response = await this.makeRequest(url, {
-        method: 'POST',
-        body: JSON.stringify(playoutData)
-      });
-
-      this.log('Playout confirmed', response);
-      return response;
-    } catch (err) {
-      this.error(`Failed to confirm playout for deal ${dealId}`, err);
-      throw err;
-    }
-  }
-
 }
 
 // Make class globally available
