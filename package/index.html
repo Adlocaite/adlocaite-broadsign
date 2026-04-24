@@ -386,9 +386,9 @@
           }
 
           // Play
-          const { vastData, dealId, mediaFile } = this.preloadedContent;
+          const { vastData, mediaFile } = this.preloadedContent;
           this.log('Playing pre-loaded content: ' + mediaFile.url);
-          await this.player.playPreloaded(vastData, dealId);
+          await this.player.playPreloaded(vastData);
           this.log('Playback completed successfully');
 
         } catch (err) {

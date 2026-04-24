@@ -5,7 +5,6 @@
  * - Pre-loading during PREBUFFER phase (before BroadSignPlay)
  * - Instant playback of pre-loaded content
  * - VAST tracking pixel firing
- * - Playout confirmation
  */
 
 class AdlocaitePlayer {
@@ -16,7 +15,6 @@ class AdlocaitePlayer {
     this.vastParser = vastParser;
 
     this.currentMediaFile = null;
-    this.currentDealId = null;
     this.videoElement = null;
     this.imageElement = null;
     this.containerElement = null;
@@ -24,7 +22,6 @@ class AdlocaitePlayer {
     this.isPlaying = false;
     this.startTime = null;
     this.duration = 0;
-    this.completionRate = 0;
 
     this.trackingFired = {
       impression: false,
@@ -192,14 +189,13 @@ class AdlocaitePlayer {
 
   // ── Playback (BroadSignPlay phase) ────────────────────────
 
-  async playPreloaded(vastData, dealId) {
+  async playPreloaded(vastData) {
     this.log('Playing pre-loaded media');
 
     if (!this.isMediaPreloaded || !this.preloadedMediaFile) {
       throw new Error('No pre-loaded media available');
     }
 
-    this.currentDealId = dealId;
     this.currentMediaFile = this.preloadedMediaFile;
     this.duration = vastData.creative?.duration || this.duration || 0;
 
@@ -243,9 +239,7 @@ class AdlocaitePlayer {
 
       this.videoElement.addEventListener('ended', async () => {
         this.log('Video playback ended');
-        this.completionRate = 100;
         await this.fireTrackingEvent('complete');
-        await this.confirmPlayout();
         this.cleanup();
         resolve();
       }, { once: true });
@@ -297,9 +291,7 @@ class AdlocaitePlayer {
       this.simulateImageProgress(displayDuration);
 
       setTimeout(async () => {
-        this.completionRate = 100;
         await this.fireTrackingEvent('complete');
-        await this.confirmPlayout();
         this.cleanup();
         resolve();
       }, displayDuration);
@@ -315,7 +307,6 @@ class AdlocaitePlayer {
 
     const currentTime = this.videoElement.currentTime;
     const progress = (currentTime / this.duration) * 100;
-    this.completionRate = Math.floor(progress);
 
     if (progress >= 25 && !this.trackingFired.firstQuartile) {
       this.fireTrackingEvent('firstQuartile');
@@ -329,7 +320,6 @@ class AdlocaitePlayer {
   simulateImageProgress(totalDuration) {
     const fireAt = (percent, eventName) => {
       setTimeout(() => {
-        this.completionRate = percent;
         this.fireTrackingEvent(eventName);
       }, (totalDuration * percent) / 100);
     };
@@ -368,31 +358,6 @@ class AdlocaitePlayer {
       setTimeout(() => resolve(), 5000);
       img.src = url;
     });
-  }
-
-  // ── Playout confirmation ──────────────────────────────────
-
-  async confirmPlayout() {
-    if (!this.currentDealId) {
-      this.log('No deal ID - skipping playout confirmation');
-      return;
-    }
-
-    this.log(`Confirming playout for deal: ${this.currentDealId}`);
-
-    try {
-      const playoutData = this.broadsignAdapter.getPlayoutTrackingData();
-      playoutData.completion_rate = this.completionRate;
-
-      const response = await this.apiClient.confirmPlayout(
-        this.currentDealId,
-        playoutData
-      );
-
-      this.log('Playout confirmed successfully', response);
-    } catch (err) {
-      this.error('Failed to confirm playout', err);
-    }
   }
 
   // ── Cleanup ───────────────────────────────────────────────
