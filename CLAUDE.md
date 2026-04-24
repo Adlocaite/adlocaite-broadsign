@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Broadsign Control HTML5 Package for integrating programmatic DOOH (Digital Out-of-Home) advertisements via the Adlocaite API. The package runs inside Broadsign Control Players (Chromium v87+ with security patches to v94) and handles offer requests, VAST parsing, media playback, and playout confirmation.
+This is a Broadsign Control HTML5 Package for integrating programmatic DOOH (Digital Out-of-Home) advertisements via the Adlocaite API. The package runs inside Broadsign Control Players (Chromium v87+ with security patches to v94) and handles offer requests, VAST parsing, media playback, and VAST tracking-pixel reporting.
 
 **Package Format**: `.x-html-package` (MIME type: `application/x-html-package`) - a ZIP archive that Broadsign downloads and unzips before playback.
 
@@ -86,12 +86,11 @@ package/
 - `isBroadsignEnvironment()` validates BroadSignObject is properly initialized
 - `getBroadSignObject()` checks local AND parent window (for test environments)
 - Tracks playback state and duration
-- Generates playout tracking data
 - Defines global `BroadSignPlay()` function which dispatches to `window.onBroadSignReady` handler or `broadsignready` custom event
 
 **AdlocaiteAPIClient** (adlocaite-api.js):
 - Handles all HTTP communication with Adlocaite API
-- Methods: `requestOfferByExternalId()`, `requestOffer()`, `acceptOffer()`, `rejectOffer()`, `confirmPlayout()`
+- Methods: `requestOfferByExternalId()`, `requestOffer()`, `acceptOffer()`, `rejectOffer()`
 - Uses External ID endpoints to support Broadsign frame_id as screen identifier
 - Implements retry logic with exponential backoff
 - Request timeout handling (default: 10s)
@@ -116,8 +115,7 @@ package/
 - HTML5 `<video>` for video files, `<img>` with timed duration for images
 - `preloadMedia()`, `preloadVideo()`, `preloadImage()` for pre-loading during PREBUFFER
 - `playPreloaded()` for instant playback of pre-loaded content
-- Fires VAST tracking events (impression, start, quartiles, complete)
-- Calls `confirmPlayout()` via API after playback completion
+- Fires VAST tracking events (impression, start, quartiles, complete) — playout is reported to the backend exclusively via these tracking pixels
 
 ### Execution Flow
 
@@ -140,8 +138,7 @@ The package pre-loads content during Broadsign's off-screen PREBUFFER phase. All
 8. `BroadSignPlay()` dispatches via `window.onBroadSignReady` or `broadsignready` event
 9. Handler waits for initialization (30s timeout), then calls `app.start()`
 10. Play pre-loaded content immediately (no loading delay)
-11. Fire VAST tracking events during playback
-12. Confirm playout via API with deal_id
+11. Fire VAST tracking pixels during playback (impression, start, quartiles, complete) — these pixels are the playout signal to the backend
 
 **CRITICAL Implementation Notes:**
 - `BroadSignPlay()` can fire BEFORE `DOMContentLoaded` - code handles this via dual handler (function + event)
@@ -205,8 +202,8 @@ The typical API flow is:
    - `externalId` is the `frame_id` from BroadSignObject
    - External ID endpoint accepts any string (not just UUIDs)
    - Alternative UUID endpoint: `GET /offers/request/{screenId}` (requires UUID format)
-2. If needed: `POST /offers/response/{offerId}` with `{action: "accept", accepted_price_cents: X}` → Returns `deal_id`
-3. After playback: `POST /playout/confirm/{dealId}` with tracking data
+2. `POST /offers/response/{offerId}` with `{action: "accept", accepted_price_cents: X}` → Returns `deal_id`. Required: without a `deal_id` the offer was not commercially closed and the package skips playback (Strict Accept).
+3. During and after playback, the package fires VAST tracking pixels (`impression`, `start`, `firstQuartile`, `midpoint`, `thirdQuartile`, `complete`) extracted from the VAST XML. These pixels are the playout signal — there is no separate confirm endpoint.
 
 **Screen Identification:**
 - Broadsign provides `frame_id` as a property in BroadSignObject
@@ -241,6 +238,7 @@ The package uses WebSocket commands to Broadsign's Remote Control API (`ws://loc
 **When Skip is Signaled:**
 - `no offers available` - API returned 404 (no offers)
 - `api error` - API returned an error
+- `accept failed` - Offer accept did not produce a `deal_id` (e.g. 404 OFFER_NOT_FOUND when the offer expired or was already consumed, 400 PRICE_VALIDATION_FAILED, network error). Strict Accept: without a deal the offer is not commercially closed, so we skip rather than serve inventory.
 - `no screen id` - No screen ID available
 - `init failed` - Initialization failed
 - `preload failed` - Pre-loading failed
@@ -298,7 +296,7 @@ Expected log sequence:
 [VAST Parser] Parsing VAST XML
 [Adlocaite Player] Playing video
 [Adlocaite Player] Firing tracking event: impression
-[Adlocaite API] Confirming playout for deal: deal_xyz
+[Adlocaite Player] Firing tracking event: complete
 ```
 
 ## Development Guidelines
@@ -311,9 +309,9 @@ Expected log sequence:
 
 ### When modifying playback:
 - Video/image logic is in `AdlocaitePlayer` class
-- Always fire VAST tracking events at correct points
+- Always fire VAST tracking events at correct points (impression, start, quartiles, complete) — these pixels are the only playout signal to the backend
 - Clean up media elements properly to avoid memory leaks
-- Confirm playout even if tracking events fail
+- Tracking-pixel failures must not stop playback (they are logged but swallowed in `fireTrackingPixel`)
 
 ### When adding features:
 - Follow the modular pattern - create new classes in separate files
@@ -356,3 +354,6 @@ Expected log sequence:
 8. **Dual BroadSignPlay handler** — `window.onBroadSignReady` (function) + `broadsignready` (custom event) for robust lifecycle handling
 9. **Test Server** — `test/server.js` with PREBUFFER simulation for local development
 10. **`frame_id` confirmed as correct ID** — No fallback chain needed; `display_unit_id` is a different concept (entire display, not screen surface)
+11. **Sub-cent pricing** — `min_bid_cents`, `accepted_price_cents`, and `bid_price_cents` are passed through as decimals (no integer rounding) so prices like `0.5` cents survive the round-trip
+12. **Strict Accept** — Pre-load only marks itself `ready` if `POST /offers/response/{offerId}` returns a `deal_id`. Any 4xx (e.g. `OFFER_NOT_FOUND`, `PRICE_VALIDATION_FAILED`), thrown error, or missing `offer_id` triggers `skip_next`. Backend `error_code` is forwarded to Axiom for diagnostics.
+13. **VAST-pixel-only playout reporting** — `POST /playout/confirm/{dealId}` (deprecated server-side, sunset 2026-06-01) is no longer called. Playout is reported exclusively via the `complete` VAST tracking pixel that the player already fires.
