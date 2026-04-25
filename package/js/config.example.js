@@ -60,7 +60,7 @@ const ADLOCAITE_CONFIG = {
   /**
    * Package version (auto-injected by build.sh from package.json)
    */
-  packageVersion: '2.0.0'
+  packageVersion: '2.1.0'
 };
 
 // Make config globally available
