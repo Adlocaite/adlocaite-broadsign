@@ -184,7 +184,7 @@ class AdlocaiteAPIClient {
    * 
    * @param {string} screenId - Screen UUID or external ID
    * @param {object} options - Request options
-   * @param {number} options.minBidCents - Minimum bid in cents
+   * @param {number} options.minBidCents - Minimum bid in cents (supports sub-cent decimals)
    * @param {boolean} options.vast - Request VAST XML format
    * @param {boolean} options.demo - Demo mode
    * @returns {Promise<object|string>} Offer data (JSON) or VAST XML (string)
@@ -272,7 +272,7 @@ class AdlocaiteAPIClient {
    * @param {string} offerId - Offer ID
    * @param {object} responseData - Response data
    * @param {string} responseData.action - 'accept' or 'reject'
-   * @param {number} responseData.accepted_price_cents - Price if accepting
+   * @param {number} responseData.accepted_price_cents - Price if accepting (supports sub-cent decimals)
    * @param {string} responseData.rejection_reason - Reason if rejecting
    * @returns {Promise<object>} Response confirmation
    */
@@ -299,7 +299,7 @@ class AdlocaiteAPIClient {
    * Accept an offer (convenience method)
    * 
    * @param {string} offerId - Offer ID
-   * @param {number} acceptedPriceCents - Accepted price in cents
+   * @param {number} acceptedPriceCents - Accepted price in cents (supports sub-cent decimals)
    * @returns {Promise<object>} Response with deal_id
    */
   async acceptOffer(offerId, acceptedPriceCents) {
@@ -321,37 +321,6 @@ class AdlocaiteAPIClient {
       action: 'reject',
       rejection_reason: rejectionReason
     });
-  }
-
-  /**
-   * Confirm playout of an ad
-   * 
-   * @param {string} dealId - Deal ID from accepted offer
-   * @param {object} playoutData - Optional playout tracking data
-   * @param {string} playoutData.played_at - ISO 8601 timestamp
-   * @param {number} playoutData.duration_seconds - Actual duration
-   * @param {number} playoutData.completion_rate - Completion percentage (0-100)
-   * @param {string} playoutData.player_version - Player version
-   * @param {string} playoutData.screen_resolution - Screen resolution
-   * @returns {Promise<object>} Playout confirmation
-   */
-  async confirmPlayout(dealId, playoutData = {}) {
-    const url = `${this.baseUrl}/playout/confirm/${dealId}`;
-    
-    this.log(`Confirming playout for deal: ${dealId}`, playoutData);
-    
-    try {
-      const response = await this.makeRequest(url, {
-        method: 'POST',
-        body: JSON.stringify(playoutData)
-      });
-
-      this.log('Playout confirmed', response);
-      return response;
-    } catch (err) {
-      this.error(`Failed to confirm playout for deal ${dealId}`, err);
-      throw err;
-    }
   }
 
 }

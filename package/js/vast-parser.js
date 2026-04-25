@@ -280,7 +280,8 @@ class VASTParser {
         // Look for bid_price_cents
         const bidPriceElement = element.querySelector('BidPriceCents, bid_price_cents');
         if (bidPriceElement) {
-          extensions.bidPriceCents = parseInt(bidPriceElement.textContent.trim()) || null;
+          const parsed = parseFloat(bidPriceElement.textContent.trim());
+          extensions.bidPriceCents = isNaN(parsed) ? null : parsed;
         }
 
         // Look for expires_at

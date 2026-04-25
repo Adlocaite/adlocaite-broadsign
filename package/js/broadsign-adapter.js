@@ -219,21 +219,6 @@ class BroadsignAdapter {
     this.log('Adapter reset');
   }
 
-  /**
-   * Get playout tracking data for API submission
-   */
-  getPlayoutTrackingData() {
-    const bsObject = this.getBroadSignObject();
-    const duration = this.getPlaybackDuration();
-
-    return {
-      played_at: this.startTime ? new Date(this.startTime).toISOString() : new Date().toISOString(),
-      duration_seconds: Math.round(duration),
-      completion_rate: 100,
-      player_version: `Broadsign Control Player + Adlocaite Integration v${this.config.packageVersion || '2.0.0'}`,
-      screen_resolution: bsObject?.frame_resolution || `${window.innerWidth}x${window.innerHeight}`
-    };
-  }
 }
 
 // Global BroadSignPlay function - called by Broadsign when ad copy is shown

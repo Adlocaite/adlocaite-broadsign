@@ -518,7 +518,7 @@
         apiBaseUrl: $('apiEnvironment').value,
         vastMode: $('vastMode').checked,
         debugMode: $('debugMode').checked,
-        minBidCents: parseInt($('minBid').value) || 0,
+        minBidCents: parseFloat($('minBid').value) || 0,
       };
 
       // Build /package-sim URL with all BroadSignObject properties
