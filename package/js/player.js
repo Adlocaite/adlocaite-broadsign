@@ -315,6 +315,14 @@ class AdlocaitePlayer {
     } else if (progress >= 75 && !this.trackingFired.thirdQuartile) {
       this.fireTrackingEvent('thirdQuartile');
     }
+
+    // Fire `complete` at 95% rather than waiting for `ended` — in DOOH the
+    // player tears down the page at slot-end, which races with the `ended`
+    // listener and the tracking pixel never makes it out. The `ended`
+    // handler stays as an idempotent fallback (guarded by trackingFired).
+    if (progress >= 95 && !this.trackingFired.complete) {
+      this.fireTrackingEvent('complete');
+    }
   }
 
   simulateImageProgress(totalDuration) {
@@ -327,6 +335,10 @@ class AdlocaitePlayer {
     fireAt(25, 'firstQuartile');
     fireAt(50, 'midpoint');
     fireAt(75, 'thirdQuartile');
+    // Fire `complete` slightly before slot-end so the pixel leaves the page
+    // before Broadsign tears it down. The final setTimeout(displayDuration)
+    // in playPreloadedImage stays as an idempotent fallback.
+    fireAt(95, 'complete');
   }
 
   async fireTrackingEvent(eventName) {
@@ -351,13 +363,22 @@ class AdlocaitePlayer {
   }
 
   async fireTrackingPixel(url) {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve();
-      img.onerror = () => resolve(); // Don't block on tracking failures
-      setTimeout(() => resolve(), 5000);
-      img.src = url;
-    });
+    // `fetch` with `keepalive: true` lets the request survive page unload —
+    // an `Image()` request is aborted when Broadsign tears the page down at
+    // slot end, which was the main reason `complete` pixels never arrived.
+    // `mode: 'no-cors'` because tracking endpoints generally don't send
+    // CORS headers; we don't read the response anyway.
+    try {
+      await fetch(url, {
+        method: 'GET',
+        mode: 'no-cors',
+        cache: 'no-store',
+        keepalive: true,
+        credentials: 'omit',
+      });
+    } catch (err) {
+      // Tracking failures must never stop playback
+    }
   }
 
   // ── Cleanup ───────────────────────────────────────────────
