@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - XSS vulnerability in `showError()` and `setupDebugLogging()` (innerHTML replaced with textContent)
+- `complete` VAST tracking pixel now fires reliably. Two changes: (1) `fireTrackingPixel()` uses `fetch(url, { keepalive: true })` instead of `new Image()` so the request survives Broadsign tearing the page down at slot-end. (2) For video, `complete` is fired at 95% playback progress (via `timeupdate`) rather than waiting for the `ended` event, and for images it is fired at 95% of the simulated display duration. Both old triggers stay in place as idempotent fallbacks. Measured on staging: only ~0.3% of resolved tracking records had `complete_at` set, vs ~99% from another publisher running a non-Broadsign player
 
 ### Security
 - Added `.env` patterns to `.gitignore`
