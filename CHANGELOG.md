@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Default API URL in config.example.js changed from staging to production
 - Console logging in AdlocaiteApp now respects `debugMode` config setting
 - Playout reporting is now exclusively via VAST tracking pixels (`impression`, `start`, quartiles, `complete`); no separate confirm API call
+- Package version moved out of `config.js`. `build.sh` now writes a gitignored `package/js/version.js` (`window.ADLOCAITE_VERSION = '...'`) from `package.json`; `logger.js` reads the global and sends it as `package_version` to Axiom. Editing `packageVersion` in `config.js` previously looked authoritative but was silently overwritten by every build — `package.json` is now the single source of truth. `test/server.js` falls back to generating `version.js` on first start when the file is missing.
+- Bumped `package.json` to 2.1.1 to match the v2.1.1 GitHub Release (the automated bump-on-merge did not run there because `gh pr merge` uses the `GITHUB_TOKEN`, which by design does not trigger downstream push workflows).
 
 ### Removed
 - `POST /playout/confirm/{dealId}` calls. The endpoint was deprecated in the backend (sunset 2026-06-01) and only re-fired the same `complete` tracking pixel the player already emits. Removed `confirmPlayout()` from `adlocaite-api.js` and `player.js`, `getPlayoutTrackingData()` from `broadsign-adapter.js`, and the supporting `currentDealId` / `completionRate` state (#27)

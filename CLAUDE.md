@@ -46,7 +46,10 @@ Key configuration options in `config.js`:
 Additional configuration options (V2):
 - `axiomToken`: Axiom ingest-only API token for remote error logging (leave empty to disable)
 - `axiomDataset`: Axiom dataset name (default: `broadsign`)
-- `packageVersion`: Version string (auto-injected by build.sh)
+
+### Version handling
+
+The package version is NOT in `config.js`. It lives only in `package.json` and is exposed at runtime via `window.ADLOCAITE_VERSION`, which `build.sh` writes to a generated `package/js/version.js` (gitignored) on every build. `logger.js` reads `window.ADLOCAITE_VERSION` and sends it as `package_version` to Axiom. If you bump the release, edit `package.json` only — do not put a version anywhere else. `test/server.js` will generate `version.js` automatically the first time it starts on a fresh checkout.
 
 Note: Publishers should configure a fallback campaign in Broadsign Control that plays when Adlocaite has no ad to serve (skip signal).
 
@@ -62,6 +65,7 @@ package/
 ├── js/
 │   ├── config.js          # Configuration (not in git, created from example)
 │   ├── config.example.js  # Configuration template
+│   ├── version.js             # Build-generated (not in git, written by build.sh from package.json)
 │   ├── logger.js              # AdlocaiteLogger class - Console + Axiom logging
 │   ├── broadsign-adapter.js   # BroadsignAdapter class - Broadsign API integration
 │   ├── adlocaite-api.js       # AdlocaiteAPIClient class - REST API client

@@ -80,7 +80,7 @@ class AdlocaiteLogger {
         message,
         data: data || undefined,
         screen_id: this.screenId || undefined,
-        package_version: this.config.packageVersion || undefined,
+        package_version: (typeof window !== 'undefined' && window.ADLOCAITE_VERSION) || undefined,
         user_agent: navigator.userAgent,
       });
     }
