@@ -17,8 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Enforce source branch
+        env:
+          # Via env, not inline: the branch name is attacker-controlled
+          # (fork PRs), and ${{ }} is expanded into the script text before
+          # the shell parses it.
+          HEAD_REF: ${{ github.head_ref }}
         run: |
-          HEAD_REF="${{ github.head_ref }}"
           echo "PR source branch: $HEAD_REF"
           echo "PR target branch: main"
 
@@ -137,7 +141,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7 # v4
+        uses: actions/checkout@v7
 
       - name: Prepare build environment
         run: |
