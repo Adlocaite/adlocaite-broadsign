@@ -58,7 +58,6 @@ Edit `package/js/config.js`:
 | `debugMode` | Enable detailed console logging and debug panel | `false` |
 | `axiomToken` | Axiom ingest-only API token for remote error logging (optional) | `''` |
 | `axiomDataset` | Axiom dataset name | `'broadsign'` |
-| `packageVersion` | Version string (auto-injected by build) | `'2.0.0'` |
 
 ## Screen Registration
 
