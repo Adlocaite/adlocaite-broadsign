@@ -15,11 +15,11 @@ echo "📋 Checking prerequisites..."
 required_files=(
   "package/index.html"
   "package/js/config.example.js"
+  "package/js/logger.js"
   "package/js/adlocaite-api.js"
   "package/js/broadsign-adapter.js"
   "package/js/vast-parser.js"
   "package/js/player.js"
-  "package/js/cache-manager.js"
   "package/css/styles.css"
   "build.sh"
 )

@@ -3,7 +3,7 @@
   "version": "2.1.1",
   "description": "Broadsign Control HTML5 Package for Adlocaite programmatic DOOH integration",
   "scripts": {
-    "package": "cd package && zip -r ../adlocaite-broadsign.x-html-package index.html js/ css/ assets/",
+    "package": "bash build.sh",
     "clean": "rm -f adlocaite-broadsign.x-html-package",
     "test:serve": "node test/server.js",
     "test": "echo 'Manual test: npm run test:serve, then open http://127.0.0.1:8000/test/'"
